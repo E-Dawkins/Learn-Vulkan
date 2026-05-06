@@ -438,3 +438,7 @@ FodyWeavers.xsd
 # Additional files built by Visual Studio
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,c++
+
+# DO NOT IGNORE DEPENDENCIES - git reads ignore commands top-to-bottom, so this is required to be last
+!deps/
+!deps/**

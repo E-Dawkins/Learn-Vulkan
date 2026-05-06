@@ -11,13 +11,16 @@ add_executable(${CURRENT_PROJECT} ${PROJECT_HEADERS} ${PROJECT_SOURCES})
 # add root include directory
 target_include_directories(${CURRENT_PROJECT} PRIVATE inc)
 
+# find + link Vulkan from system, this is so we do not have to source control a massive SDK
+find_package(Vulkan REQUIRED)
+target_link_libraries(${CURRENT_PROJECT} PRIVATE Vulkan::Vulkan)
+
 # link any dependencies to project
 target_link_libraries(${CURRENT_PROJECT} PRIVATE 
     glfw
     glm
     stb
     tinyobj
-    vulkan_sdk
 )
 
 # Create filters based on file paths (*.h *.cpp)
