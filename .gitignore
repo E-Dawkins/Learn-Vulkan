@@ -439,6 +439,10 @@ FodyWeavers.xsd
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,c++
 
-# DO NOT IGNORE DEPENDENCIES - git reads ignore commands top-to-bottom, so this is required to be last
+# DO NOT IGNORE DEPENDENCIES - this is here because git reads ignore commands top-to-bottom
 !deps/
 !deps/**
+
+# DO NOT IGNORE ASSETS
+!assets/
+!assets/**
