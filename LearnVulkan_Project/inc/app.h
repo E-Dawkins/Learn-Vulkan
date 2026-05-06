@@ -166,7 +166,7 @@ private:
 	void SetupDebugMessenger();
 	void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& _createInfo);
 	void CreateWindowSurface();
-	VkSampleCountFlagBits GetMaxUsableSampleCount();
+	VkSampleCountFlagBits GetMaxUsableSampleCount() const;
 	void PickPhysicalDevice();
 	bool IsDeviceSuitable(VkPhysicalDevice _device);
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice _device);

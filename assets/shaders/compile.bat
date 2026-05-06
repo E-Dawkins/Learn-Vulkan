@@ -1,0 +1,22 @@
+@echo off
+
+%VULKAN_SDK%/Bin/glslc.exe shader.vert -o shader.vert.spv
+if errorLevel 1 (
+	echo shader.vert compilation failed!
+	echo(
+	pause
+	exit /b 1
+)
+
+%VULKAN_SDK%/Bin/glslc.exe shader.frag -o shader.frag.spv
+if errorLevel 1 (
+	echo shader.frag compilation failed!
+	echo(
+	pause
+	exit /b 1
+)
+
+echo shader.vert + shader.frag compilation successful.
+
+echo(
+pause

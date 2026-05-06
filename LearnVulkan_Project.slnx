@@ -1,7 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="LearnVulkan_Project/LearnVulkan_Project.vcxproj" Id="77225e11-8d69-431b-aa08-badb70b29f66" />
-</Solution>

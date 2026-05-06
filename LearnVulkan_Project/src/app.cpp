@@ -18,12 +18,14 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
+#include "utils/vulkan_ext_funcs.h"
+
 const uint32_t gWidth = 800;
 const uint32_t gHeight = 600;
 const int gMaxFramesInFlight = 2;
 
-const std::string gModelPath = "models/viking_room.obj";
-const std::string gTexturePath = "textures/viking_room.png";
+const std::string gModelPath = "assets/models/viking_room.obj";
+const std::string gTexturePath = "assets/textures/viking_room.png";
 
 const std::vector<const char*> gValidationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -39,48 +41,11 @@ const bool gEnableValidationLayers = false;
 const bool gEnableValidationLayers = true;
 #endif
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT _messageSeverity, VkDebugUtilsMessageTypeFlagsEXT _messageType, const VkDebugUtilsMessengerCallbackDataEXT* _callbackData, void* _userData) {
-	std::cerr << "Validation layer: " << _callbackData->pMessage << "\n";
-	return false;
-}
-
-// The following are extension functions, we have to manually hook up to them
-#pragma region ExtFunctions
-#define GET_FUNC(x) (PFN_ ## x)(vkGetInstanceProcAddr(_instance, #x))
-
-static VkResult CreateDebugUtilsMessengerEXT(VkInstance _instance, const VkDebugUtilsMessengerCreateInfoEXT* _createInfo, const VkAllocationCallbacks* _allocator, VkDebugUtilsMessengerEXT* _debugMessenger) {
-	auto func = GET_FUNC(vkCreateDebugUtilsMessengerEXT);
-	if (func != nullptr) {
-		return func(_instance, _createInfo, _allocator, _debugMessenger);
-	}
-	else {
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
-	}
-}
-
-static void DestroyDebugUtilsMessengerEXT(VkInstance _instance, VkDebugUtilsMessengerEXT _debugMessenger, const VkAllocationCallbacks* _allocator) {
-	auto func = GET_FUNC(vkDestroyDebugUtilsMessengerEXT);
-	if (func != nullptr) {
-		func(_instance, _debugMessenger, _allocator);
-	}
-}
-
-static VkResult SetDebugUtilsObjectNameEXT(VkInstance _instance, VkDevice _device, const VkDebugUtilsObjectNameInfoEXT* _nameInfo) {
-	auto func = GET_FUNC(vkSetDebugUtilsObjectNameEXT);
-	if (func != nullptr) {
-		return func(_device, _nameInfo);
-	}
-	else {
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
-	}
-}
-#pragma endregion
-
 static std::vector<char> ReadFile(const std::string& _fileName) {
 	std::ifstream file(_fileName, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open()) {
-		throw std::runtime_error("Failed to open file!");
+		throw std::runtime_error("Failed to open file! File path: " + _fileName);
 	}
 
 	// Since we started reading from the EOF, it is trivial to get the file size
@@ -96,7 +61,7 @@ static std::vector<char> ReadFile(const std::string& _fileName) {
 	return buffer;
 }
 
-static void FramebufferResizeCallback(GLFWwindow* _window, int _width, int _height) {
+static void FramebufferResizeCallback(GLFWwindow* _window, int /*_width*/, int /*_height*/) {
 	if (App* app = reinterpret_cast<App*>(glfwGetWindowUserPointer(_window))) {
 		app->framebufferResized = true;
 	}
@@ -280,7 +245,7 @@ void App::SetupDebugMessenger() {
 	VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
 	PopulateDebugMessengerCreateInfo(createInfo);
 
-	if (CreateDebugUtilsMessengerEXT(mInstance, &createInfo, nullptr, &mDebugMessenger) != VK_SUCCESS) {
+	if (Utils::VulkanExtFuncs::CreateDebugUtilsMessengerEXT(mInstance, &createInfo, nullptr, &mDebugMessenger) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to set up debug messenger!");
 	}
 }
@@ -297,7 +262,7 @@ void App::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& _
 		.messageType =
 			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
 			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-		.pfnUserCallback = DebugCallback,
+		.pfnUserCallback = Utils::VulkanExtFuncs::DebugCallback,
 		.pUserData = nullptr // optional, for any custom user data
 	};
 }
@@ -308,7 +273,7 @@ void App::CreateWindowSurface() {
 	}
 }
 
-VkSampleCountFlagBits App::GetMaxUsableSampleCount() {
+VkSampleCountFlagBits App::GetMaxUsableSampleCount() const {
 	VkPhysicalDeviceProperties physicalDeviceProperties = {};
 	vkGetPhysicalDeviceProperties(mPhysicalDevice, &physicalDeviceProperties);
 
@@ -793,8 +758,8 @@ void App::CreateDescriptorSetLayout() {
 }
 
 void App::CreateGraphicsPipeline() {
-	std::vector<char> vertShaderCode = ReadFile("shaders/shader.vert.spv");
-	std::vector<char> fragShaderCode = ReadFile("shaders/shader.frag.spv");
+	std::vector<char> vertShaderCode = ReadFile("assets/shaders/shader.vert.spv");
+	std::vector<char> fragShaderCode = ReadFile("assets/shaders/shader.frag.spv");
 
 	// -- Shader Modules --
 	VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
@@ -1146,7 +1111,7 @@ void App::CreateImage(uint32_t _width, uint32_t _height, uint32_t _mipLevels, Vk
 	vkBindImageMemory(mLogicalDevice, _image, _imageMemory, 0);
 }
 
-void App::TransitionImageLayout(VkImage _image, VkFormat _format, VkImageLayout _oldLayout, VkImageLayout _newLayout, uint32_t _mipLevels) {
+void App::TransitionImageLayout(VkImage _image, VkFormat /*_format*/, VkImageLayout _oldLayout, VkImageLayout _newLayout, uint32_t _mipLevels) {
 	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
 	VkImageMemoryBarrier barrier = {
@@ -2166,7 +2131,7 @@ void App::Cleanup() {
 	vkDestroyDevice(mLogicalDevice, nullptr);
 
 	if (gEnableValidationLayers) {
-		DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
+		Utils::VulkanExtFuncs::DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
 	}
 
 	vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
