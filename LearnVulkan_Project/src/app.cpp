@@ -1,24 +1,13 @@
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
+#include "pch.h"
+
 #include "app.h"
+#include "utils/vulkan_ext_funcs.h"
 
 #include <algorithm>
 #include <chrono>
-#include <fstream>
-#include <iostream>
-#include <stdexcept>
-#include <set>
-#include <unordered_map>
-
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/gtc/matrix_transform.hpp>
-
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
-
-#include "utils/vulkan_ext_funcs.h"
 
 const uint32_t gWidth = 800;
 const uint32_t gHeight = 600;

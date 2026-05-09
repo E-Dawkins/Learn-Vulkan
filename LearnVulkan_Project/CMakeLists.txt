@@ -55,4 +55,7 @@ if (MSVC)
 
     # set working directory to cmake source directory
     set_property(TARGET ${CURRENT_PROJECT} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
+    # set up pre-compiled header
+    target_precompile_headers(${CURRENT_PROJECT} PRIVATE inc/pch.h)
 endif()

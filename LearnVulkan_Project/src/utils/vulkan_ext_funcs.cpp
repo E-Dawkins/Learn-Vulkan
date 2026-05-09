@@ -1,6 +1,6 @@
-#include "utils/vulkan_ext_funcs.h"
+#include "pch.h"
 
-#include <iostream>
+#include "utils/vulkan_ext_funcs.h"
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Utils::VulkanExtFuncs::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT /*_messageSeverity*/, VkDebugUtilsMessageTypeFlagsEXT /*_messageType*/, const VkDebugUtilsMessengerCallbackDataEXT* _callbackData, void* /*_userData*/) {
 	std::cerr << "Validation layer: " << _callbackData->pMessage << "\n";
