@@ -3,12 +3,14 @@
 #include "app.h"
 
 int main() {
-	App app;
-
 	try {
-		app.Run();
+		App::Init();
+		App::GetInstance().Run();
+		App::Shutdown();
 	}
 	catch (const std::exception& e) {
+		App::Shutdown();
+
 		std::cerr << e.what() << "\n";
 		std::cin.get();
 		return 1;

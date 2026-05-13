@@ -4,10 +4,14 @@
 #include "pch.h"
 
 #include "app.h"
+#include "renderer/pipeline_layout_manager.h"
+#include "renderer/shader.h"
 #include "utils/vulkan_ext_funcs.h"
 
 #include <algorithm>
 #include <chrono>
+
+static App* gInstance = nullptr;
 
 const uint32_t gWidth = 800;
 const uint32_t gHeight = 600;
@@ -87,6 +91,9 @@ void App::InitVulkan() {
 	CreateWindowSurface();
 	PickPhysicalDevice();
 	CreateLogicalDevice();
+
+	PipelineLayoutManager::Init();
+
 	CreateSwapChain();
 	CreateImageViews();
 	CreateRenderPass();
@@ -293,7 +300,7 @@ void App::PickPhysicalDevice() {
 	for (const auto& device : devices) {
 		if (IsDeviceSuitable(device)) {
 			mPhysicalDevice = device;
-			mMsaaSamples = GetMaxUsableSampleCount();
+			mMsaaState.samples = GetMaxUsableSampleCount();
 			break;
 		}
 	}
@@ -621,7 +628,7 @@ void App::CreateImageViews() {
 void App::CreateRenderPass() {
 	VkAttachmentDescription colorAttachment = {
 		.format = mSwapChainImageFormat,
-		.samples = mMsaaSamples,
+		.samples = mMsaaState.samples,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -637,7 +644,7 @@ void App::CreateRenderPass() {
 
 	VkAttachmentDescription depthAttachment = {
 		.format = FindDepthFormat(),
-		.samples = mMsaaSamples,
+		.samples = mMsaaState.samples,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 
 		// We do not care about storing the depth data across frames
@@ -708,7 +715,10 @@ void App::CreateRenderPass() {
 		.pDependencies = &dependency
 	};
 
-	if (vkCreateRenderPass(mLogicalDevice, &renderPassInfo, nullptr, &mRenderPass) != VK_SUCCESS) {
+	// One render pass for now
+	mRenderPasses.push_back({});
+
+	if (vkCreateRenderPass(mLogicalDevice, &renderPassInfo, nullptr, &mRenderPasses[0]) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create render pass!");
 	}
 }
@@ -750,6 +760,18 @@ void App::CreateGraphicsPipeline() {
 	std::vector<char> vertShaderCode = ReadFile("assets/shaders/shader.vert.spv");
 	std::vector<char> fragShaderCode = ReadFile("assets/shaders/shader.frag.spv");
 
+	Shader test(
+		{
+			ShaderStage{ .filePath = "assets/shaders/shader.vert.spv", .flagBit = VK_SHADER_STAGE_VERTEX_BIT },
+			ShaderStage{ .filePath = "assets/shaders/shader.frag.spv", .flagBit = VK_SHADER_STAGE_FRAGMENT_BIT }
+		},
+		BlendModel::Opaque,
+		ShadingModel::Unlit
+	);
+	test;
+
+	// TODO - use Shader class
+
 	// -- Shader Modules --
 	VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
@@ -773,6 +795,8 @@ void App::CreateGraphicsPipeline() {
 		fragShaderStageInfo
 	};
 
+	// TODO - Mesh class with static Vertex input info
+
 	// -- Vertex Input --
 	auto bindingDescription = Vertex::GetBindingDescription();
 	auto attributeDescriptions = Vertex::GetAttributeDescriptions();
@@ -785,27 +809,14 @@ void App::CreateGraphicsPipeline() {
 		.pVertexAttributeDescriptions = attributeDescriptions.data()
 	};
 
+	// TODO - move input assembly + dynamic states into pipeline layout manager
+
 	// -- Input Assembly --
 	// Say the vertex data is only triangles, no primitive restart
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		.primitiveRestartEnable = VK_FALSE
-	};
-
-	// -- Viewport + Scissor --
-	VkViewport viewport = {
-		.x = 0.f,
-		.y = 0.f,
-		.width = (float)(mSwapChainExtent.width),
-		.height = (float)(mSwapChainExtent.height),
-		.minDepth = 0.f,
-		.maxDepth = 1.f
-	};
-
-	VkRect2D scissor = {
-		.offset = { 0, 0 },
-		.extent = mSwapChainExtent
 	};
 
 	// -- Dynamic States --
@@ -827,6 +838,8 @@ void App::CreateGraphicsPipeline() {
 		.scissorCount = 1
 	};
 
+	// TODO - move rasterizer stuff into shader constructor as struct
+
 	// -- Rasterizer --
 	VkPipelineRasterizationStateCreateInfo rasterizer = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -842,16 +855,20 @@ void App::CreateGraphicsPipeline() {
 		.lineWidth = 1.f
 	};
 
+	// TODO - mutlisampling into app, as these settings should be global
+
 	// -- Multisampling --
 	VkPipelineMultisampleStateCreateInfo multisampling = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = mMsaaSamples,
-		.sampleShadingEnable = VK_FALSE,
-		.minSampleShading = 1.f, // optional
+		.rasterizationSamples = mMsaaState.samples,
+		.sampleShadingEnable = mMsaaState.sampleShadingEnabled,
+		.minSampleShading = mMsaaState.minSampleShading,
 		.pSampleMask = nullptr, // optional
 		.alphaToCoverageEnable = VK_FALSE, // optional
 		.alphaToOneEnable = VK_FALSE // optional
 	};
+
+	// TODO - move color/depth blending to pipeline preset/s
 
 	// -- Color Blending --
 	// No blending for now
@@ -909,6 +926,9 @@ void App::CreateGraphicsPipeline() {
 		.maxDepthBounds = 1.f // optional
 	};
 
+	// TODO - move pipeline layout to some manager class, which takes pipeline presets => handful pipeline layouts
+	//      - this also should have pre-defined descriptor sets, uniform buffer bindings, etc.
+
 	// -- Pipeline Layout --
 	// This is where descriptor sets / uniforms are bound to the pipeline
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
@@ -923,6 +943,8 @@ void App::CreateGraphicsPipeline() {
 		throw std::runtime_error("Failed to create pipeline layout!");
 	}
 
+	// TODO - move pipeline (not layout) creation to shader
+
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.stageCount = 2,
@@ -936,7 +958,7 @@ void App::CreateGraphicsPipeline() {
 		.pColorBlendState = &colorBlending,
 		.pDynamicState = &dynamicState,
 		.layout = mPipelineLayout,
-		.renderPass = mRenderPass, // render pass to use
+		.renderPass = mRenderPasses[0], // render pass to use
 		.subpass = 0, // subpass index where this pipeline is used
 
 		// These allow us to derive a pipeline from another, which
@@ -983,7 +1005,7 @@ void App::CreateFramebuffers() {
 
 		VkFramebufferCreateInfo framebufferInfo = {
 			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-			.renderPass = mRenderPass,
+			.renderPass = mRenderPasses[0],
 			.attachmentCount = static_cast<uint32_t>(attachments.size()),
 			.pAttachments = attachments.data(),
 			.width = mSwapChainExtent.width,
@@ -1216,7 +1238,7 @@ void App::CreateColorResources() {
 		mSwapChainExtent.width,
 		mSwapChainExtent.height,
 		1,
-		mMsaaSamples,
+		mMsaaState.samples,
 		colorFormat,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -1249,7 +1271,7 @@ void App::CreateDepthResources() {
 		mSwapChainExtent.width,
 		mSwapChainExtent.height,
 		1,
-		mMsaaSamples,
+		mMsaaState.samples,
 		depthFormat,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -1800,7 +1822,7 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 
 	VkRenderPassBeginInfo renderPassInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-		.renderPass = mRenderPass,
+		.renderPass = mRenderPasses[0],
 		.framebuffer = mSwapChainFramebuffers[_imageIndex],
 		.renderArea = {
 			.offset = { 0, 0 },
@@ -2102,7 +2124,10 @@ void App::Cleanup() {
 
 	vkDestroyPipeline(mLogicalDevice, mGraphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(mLogicalDevice, mPipelineLayout, nullptr);
-	vkDestroyRenderPass(mLogicalDevice, mRenderPass, nullptr);
+
+	for (size_t i = 0; i < mRenderPasses.size(); i++) {
+		vkDestroyRenderPass(mLogicalDevice, mRenderPasses[i], nullptr);
+	}
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
 		vkDestroySemaphore(mLogicalDevice, mImageAvailableSemaphores[i], nullptr);
@@ -2116,6 +2141,8 @@ void App::Cleanup() {
 	}
 
 	vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
+
+	PipelineLayoutManager::Shutdown();
 
 	vkDestroyDevice(mLogicalDevice, nullptr);
 

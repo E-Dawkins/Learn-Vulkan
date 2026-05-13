@@ -1,4 +1,7 @@
 #pragma once
+#include "utils/singleton.h"
+
+#include "renderer/mesh.h"
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
@@ -28,68 +31,6 @@ struct SwapChainSupportDetails
 	std::vector<VkPresentModeKHR> presentModes;
 };
 
-struct Vertex
-{
-	glm::vec3 pos;
-	glm::vec3 color;
-	glm::vec2 texCoord;
-
-	static VkVertexInputBindingDescription GetBindingDescription() {
-		VkVertexInputBindingDescription bindingDescription = {
-			.binding = 0,
-			.stride = sizeof(Vertex),
-			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-		};
-
-		return bindingDescription;
-	}
-
-	static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
-
-		// Position attribute
-		attributeDescriptions[0] = {
-			.location = 0,
-			.binding = 0,
-			.format = VK_FORMAT_R32G32B32_SFLOAT,
-			.offset = offsetof(Vertex, pos)
-		};
-
-		// Color attribute
-		attributeDescriptions[1] = {
-			.location = 1,
-			.binding = 0,
-			.format = VK_FORMAT_R32G32B32_SFLOAT,
-			.offset = offsetof(Vertex, color)
-		};
-
-		// Texcoord attribute
-		attributeDescriptions[2] = {
-			.location = 2,
-			.binding = 0,
-			.format = VK_FORMAT_R32G32_SFLOAT,
-			.offset = offsetof(Vertex, texCoord)
-		};
-
-		return attributeDescriptions;
-	}
-
-	bool operator == (const Vertex& _other) const {
-		return pos == _other.pos && color == _other.color && texCoord == _other.texCoord;
-	}
-};
-
-namespace std {
-	template<> struct hash<Vertex>
-	{
-		size_t operator () (const Vertex& _vertex) const {
-			return ((hash<glm::vec3>()(_vertex.pos) ^
-				(hash<glm::vec3>()(_vertex.color) << 1)) >> 1) ^
-				(hash<glm::vec2>()(_vertex.texCoord) << 1);
-		}
-	};
-}
-
 struct UniformBufferObject
 {
 	alignas(16) glm::mat4 model;
@@ -97,7 +38,14 @@ struct UniformBufferObject
 	alignas(16) glm::mat4 proj;
 };
 
-class App
+struct MultisampleState
+{
+	VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+	VkBool32 sampleShadingEnabled = VK_FALSE;
+	float minSampleShading = 1.f;
+};
+
+class App : public ISingleton<App>
 {
 private:
 	GLFWwindow* mWindow = nullptr;
@@ -115,7 +63,7 @@ private:
 	VkExtent2D mSwapChainExtent;
 	std::vector<VkImageView> mSwapChainImageViews;
 	std::vector<VkFramebuffer> mSwapChainFramebuffers;
-	VkRenderPass mRenderPass;
+	std::vector<VkRenderPass> mRenderPasses;
 	VkDescriptorSetLayout mDescriptorSetLayout;
 	VkPipelineLayout mPipelineLayout;
 	VkPipeline mGraphicsPipeline;
@@ -144,7 +92,9 @@ private:
 	VkImage mDepthImage;
 	VkDeviceMemory mDepthImageMemory;
 	VkImageView mDepthImageView;
-	VkSampleCountFlagBits mMsaaSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	MultisampleState mMsaaState;
+
 	VkImage mColorImage;
 	VkDeviceMemory mColorImageMemory;
 	VkImageView mColorImageView;
@@ -154,6 +104,13 @@ public:
 
 public:
 	void Run();
+
+	const VkDevice& GetLogicalDevice() const { return mLogicalDevice; }
+	const MultisampleState& GetMsaaState() const { return mMsaaState; }
+	const VkRenderPass& GetRenderPass(size_t _index) const {
+		assert(_index < mRenderPasses.size());
+		return mRenderPasses[_index];
+	}
 
 private:
 	void InitWindow();
