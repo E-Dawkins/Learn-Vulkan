@@ -13,6 +13,13 @@ enum class ShadingModel
 	Unlit
 };
 
+enum class DescriptorSet
+{
+	Global,
+	/*Material,
+	Mesh*/
+};
+
 struct PipelinePreset
 {
 	BlendModel blend;
@@ -20,8 +27,6 @@ struct PipelinePreset
 	VkPipelineColorBlendAttachmentState colorBlendAttachment;
 	VkPipelineColorBlendStateCreateInfo colorBlendState;
 	VkPipelineDepthStencilStateCreateInfo depthStencilState;
-	uint32_t renderPassIndex;
-	uint32_t subpassIndex;
 };
 
 struct DescriptorSetLayout
@@ -56,4 +61,5 @@ private:
 public:
 	const VkPipelineLayout& GetLayoutForModel(BlendModel _blend, ShadingModel _shading) const;
 	const PipelinePreset& GetPresetForModel(BlendModel _blend, ShadingModel _shading) const;
+	const VkDescriptorSetLayout& GetDescriptorSetLayout(DescriptorSet _set) const;
 };

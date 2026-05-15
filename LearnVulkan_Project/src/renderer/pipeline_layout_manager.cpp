@@ -46,9 +46,7 @@ void PipelineLayoutManager::InitPresets() {
 			.depthCompareOp = VK_COMPARE_OP_LESS,
 			.depthBoundsTestEnable = VK_FALSE,
 			.stencilTestEnable = VK_FALSE,
-		},
-		.renderPassIndex = 0,
-		.subpassIndex = 0
+		}
 	});
 
 	auto& back = mPresets.back();
@@ -167,4 +165,12 @@ const PipelinePreset& PipelineLayoutManager::GetPresetForModel(BlendModel _blend
 	assert(presetIndex < mPresets.size());
 
 	return mPresets[presetIndex];
+}
+
+const VkDescriptorSetLayout& PipelineLayoutManager::GetDescriptorSetLayout(DescriptorSet _set) const {
+	uint8_t setIndex = static_cast<uint8_t>(_set);
+
+	assert(setIndex < mDescriptorSetLayouts.size());
+
+	return mDescriptorSetLayouts[setIndex];
 }

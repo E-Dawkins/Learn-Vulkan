@@ -31,6 +31,8 @@ public:
 	Shader(const std::vector<ShaderStage>& _stages, BlendModel _blendModel, ShadingModel _shadingModel, RasterizerState _rasterizerState = {});
 	~Shader();
 
+	void BindShaderResources(const VkCommandBuffer& _commandBuffer) const;
+
 private:
 	VkShaderModule CreateModule(const ShaderStage& _stage, const std::vector<char>& _shaderCode);
 	void CreatePipeline(const std::vector<VkPipelineShaderStageCreateInfo>& _stageCreateInfos);

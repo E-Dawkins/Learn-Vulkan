@@ -1,8 +1,6 @@
 #pragma once
 #include "utils/singleton.h"
 
-#include "renderer/mesh.h"
-
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 
@@ -13,6 +11,9 @@
 #include <array>
 #include <optional>
 #include <vector>
+
+#include "renderer/mesh.h"
+#include "renderer/shader.h"
 
 struct QueueFamilyIndices
 {
@@ -64,9 +65,6 @@ private:
 	std::vector<VkImageView> mSwapChainImageViews;
 	std::vector<VkFramebuffer> mSwapChainFramebuffers;
 	std::vector<VkRenderPass> mRenderPasses;
-	VkDescriptorSetLayout mDescriptorSetLayout;
-	VkPipelineLayout mPipelineLayout;
-	VkPipeline mGraphicsPipeline;
 	VkCommandPool mCommandPool;
 	std::vector<Vertex> mVertices;
 	std::vector<uint32_t> mIndices;
@@ -98,6 +96,8 @@ private:
 	VkImage mColorImage;
 	VkDeviceMemory mColorImageMemory;
 	VkImageView mColorImageView;
+
+	Shader* mTempShader;
 
 public:
 	bool framebufferResized = false;
@@ -137,7 +137,6 @@ private:
 	VkImageView CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags, uint32_t _mipLevels) const;
 	void CreateImageViews();
 	void CreateRenderPass();
-	void CreateDescriptorSetLayout();
 	void CreateGraphicsPipeline();
 	VkShaderModule CreateShaderModule(const std::vector<char>& _code) const;
 	void CreateFramebuffers();

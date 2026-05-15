@@ -34,26 +34,6 @@ const bool gEnableValidationLayers = false;
 const bool gEnableValidationLayers = true;
 #endif
 
-static std::vector<char> ReadFile(const std::string& _fileName) {
-	std::ifstream file(_fileName, std::ios::ate | std::ios::binary);
-
-	if (!file.is_open()) {
-		throw std::runtime_error("Failed to open file! File path: " + _fileName);
-	}
-
-	// Since we started reading from the EOF, it is trivial to get the file size
-	size_t fileSize = (size_t)(file.tellg());
-	std::vector<char> buffer(fileSize);
-
-	// Return back to start of file, and read the entire thing at once
-	file.seekg(0);
-	file.read(buffer.data(), fileSize);
-
-	file.close();
-
-	return buffer;
-}
-
 static void FramebufferResizeCallback(GLFWwindow* _window, int /*_width*/, int /*_height*/) {
 	if (App* app = reinterpret_cast<App*>(glfwGetWindowUserPointer(_window))) {
 		app->framebufferResized = true;
@@ -97,7 +77,6 @@ void App::InitVulkan() {
 	CreateSwapChain();
 	CreateImageViews();
 	CreateRenderPass();
-	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 	CreateCommandPool();
 	CreateColorResources();
@@ -723,259 +702,14 @@ void App::CreateRenderPass() {
 	}
 }
 
-void App::CreateDescriptorSetLayout() {
-	VkDescriptorSetLayoutBinding uboLayoutBinding = {
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-		.pImmutableSamplers = nullptr // optional
-	};
-
-	VkDescriptorSetLayoutBinding samplerLayoutBinding = {
-		.binding = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr // optional
-	};
-
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { 
-		uboLayoutBinding,
-		samplerLayoutBinding
-	};
-
-	VkDescriptorSetLayoutCreateInfo layoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = static_cast<uint32_t>(bindings.size()),
-		.pBindings = bindings.data()
-	};
-
-	if (vkCreateDescriptorSetLayout(mLogicalDevice, &layoutInfo, nullptr, &mDescriptorSetLayout) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create descriptor set layout!");
-	}
-}
-
 void App::CreateGraphicsPipeline() {
-	std::vector<char> vertShaderCode = ReadFile("assets/shaders/shader.vert.spv");
-	std::vector<char> fragShaderCode = ReadFile("assets/shaders/shader.frag.spv");
-
-	Shader test(
-		{
-			ShaderStage{ .filePath = "assets/shaders/shader.vert.spv", .flagBit = VK_SHADER_STAGE_VERTEX_BIT },
-			ShaderStage{ .filePath = "assets/shaders/shader.frag.spv", .flagBit = VK_SHADER_STAGE_FRAGMENT_BIT }
+	mTempShader = new Shader(std::vector<ShaderStage>{
+			ShaderStage{.filePath = "assets/shaders/shader.vert.spv", .flagBit = VK_SHADER_STAGE_VERTEX_BIT },
+			ShaderStage{.filePath = "assets/shaders/shader.frag.spv", .flagBit = VK_SHADER_STAGE_FRAGMENT_BIT }
 		},
 		BlendModel::Opaque,
 		ShadingModel::Unlit
 	);
-	test;
-
-	// TODO - use Shader class
-
-	// -- Shader Modules --
-	VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
-	VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
-
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.stage = VK_SHADER_STAGE_VERTEX_BIT,
-		.module = vertShaderModule,
-		.pName = "main", // shader code entry point
-	};
-
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.module = fragShaderModule,
-		.pName = "main", // shader code entry point
-	};
-
-	VkPipelineShaderStageCreateInfo shaderStages[] = {
-		vertShaderStageInfo,
-		fragShaderStageInfo
-	};
-
-	// TODO - Mesh class with static Vertex input info
-
-	// -- Vertex Input --
-	auto bindingDescription = Vertex::GetBindingDescription();
-	auto attributeDescriptions = Vertex::GetAttributeDescriptions();
-
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.vertexBindingDescriptionCount = 1,
-		.pVertexBindingDescriptions = &bindingDescription,
-		.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
-		.pVertexAttributeDescriptions = attributeDescriptions.data()
-	};
-
-	// TODO - move input assembly + dynamic states into pipeline layout manager
-
-	// -- Input Assembly --
-	// Say the vertex data is only triangles, no primitive restart
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		.primitiveRestartEnable = VK_FALSE
-	};
-
-	// -- Dynamic States --
-	std::vector<VkDynamicState> dynamicStates = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-
-	VkPipelineDynamicStateCreateInfo dynamicState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
-		.pDynamicStates = dynamicStates.data()
-	};
-
-	// -- Viewport State (no viewport or scissor pointers) --
-	VkPipelineViewportStateCreateInfo viewportState = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.scissorCount = 1
-	};
-
-	// TODO - move rasterizer stuff into shader constructor as struct
-
-	// -- Rasterizer --
-	VkPipelineRasterizationStateCreateInfo rasterizer = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.depthClampEnable = VK_FALSE, // do not clamp fragment depths, discard them
-		.rasterizerDiscardEnable = VK_FALSE, // do not discard rasterizer stage
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_BACK_BIT,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.depthBiasEnable = VK_FALSE,
-		.depthBiasConstantFactor = 0.f, // optional
-		.depthBiasClamp = 0.f, // optional
-		.depthBiasSlopeFactor = 0.f, // optional
-		.lineWidth = 1.f
-	};
-
-	// TODO - mutlisampling into app, as these settings should be global
-
-	// -- Multisampling --
-	VkPipelineMultisampleStateCreateInfo multisampling = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = mMsaaState.samples,
-		.sampleShadingEnable = mMsaaState.sampleShadingEnabled,
-		.minSampleShading = mMsaaState.minSampleShading,
-		.pSampleMask = nullptr, // optional
-		.alphaToCoverageEnable = VK_FALSE, // optional
-		.alphaToOneEnable = VK_FALSE // optional
-	};
-
-	// TODO - move color/depth blending to pipeline preset/s
-
-	// -- Color Blending --
-	// No blending for now
-	VkPipelineColorBlendAttachmentState colorBlendAttachment = {
-		.blendEnable = VK_FALSE,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_ONE, // optional
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO, // optional
-		.colorBlendOp = VK_BLEND_OP_ADD, // optional
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE, // optional
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO, // optional
-		.alphaBlendOp = VK_BLEND_OP_ADD, // optional
-		.colorWriteMask = 
-			VK_COLOR_COMPONENT_R_BIT |
-			VK_COLOR_COMPONENT_G_BIT |
-			VK_COLOR_COMPONENT_B_BIT |
-			VK_COLOR_COMPONENT_A_BIT,
-	};
-
-	VkPipelineColorBlendStateCreateInfo colorBlending = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.logicOpEnable = VK_FALSE,
-		.logicOp = VK_LOGIC_OP_COPY, // optional
-		.attachmentCount = 1,
-		.pAttachments = &colorBlendAttachment,
-		.blendConstants = { // optional
-			0.f,
-			0.f,
-			0.f,
-			0.f
-		}
-	};
-
-	// -- Depth Stencil --
-	VkPipelineDepthStencilStateCreateInfo depthStencil = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-
-		// Should new fragments be compared to the depth buffer?
-		.depthTestEnable = VK_TRUE,
-
-		// Should the new fragment depths that pass the
-		// depth test be written to the depth buffer?
-		.depthWriteEnable = VK_TRUE,
-
-		// The comparison op to keep or discard fragments
-		.depthCompareOp = VK_COMPARE_OP_LESS,
-
-		// These can be used to only keep fragments that
-		// pass additional tests, depth within [min..max]
-		// ?? or some stencil test ??
-		.depthBoundsTestEnable = VK_FALSE,
-		.stencilTestEnable = VK_FALSE,
-		.front = {},
-		.back = {},
-		.minDepthBounds = 0.f, // optional
-		.maxDepthBounds = 1.f // optional
-	};
-
-	// TODO - move pipeline layout to some manager class, which takes pipeline presets => handful pipeline layouts
-	//      - this also should have pre-defined descriptor sets, uniform buffer bindings, etc.
-
-	// -- Pipeline Layout --
-	// This is where descriptor sets / uniforms are bound to the pipeline
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
-		.pSetLayouts = &mDescriptorSetLayout,
-		.pushConstantRangeCount = 0, // optional
-		.pPushConstantRanges = nullptr // optional
-	};
-
-	if (vkCreatePipelineLayout(mLogicalDevice, &pipelineLayoutInfo, nullptr, &mPipelineLayout) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create pipeline layout!");
-	}
-
-	// TODO - move pipeline (not layout) creation to shader
-
-	VkGraphicsPipelineCreateInfo pipelineInfo = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.stageCount = 2,
-		.pStages = shaderStages,
-		.pVertexInputState = &vertexInputInfo,
-		.pInputAssemblyState = &inputAssembly,
-		.pViewportState = &viewportState,
-		.pRasterizationState = &rasterizer,
-		.pMultisampleState = &multisampling,
-		.pDepthStencilState = &depthStencil,
-		.pColorBlendState = &colorBlending,
-		.pDynamicState = &dynamicState,
-		.layout = mPipelineLayout,
-		.renderPass = mRenderPasses[0], // render pass to use
-		.subpass = 0, // subpass index where this pipeline is used
-
-		// These allow us to derive a pipeline from another, which
-		// is usually less expensive and pipelines with a shared
-		// parent are quicker to switch between
-		.basePipelineHandle = VK_NULL_HANDLE, // optional
-		.basePipelineIndex = -1, // optional
-	};
-
-	// This function call can actually be used to create multiple
-	// pipelines at once, by using an array of pipeline info structs
-	if (vkCreateGraphicsPipelines(mLogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &mGraphicsPipeline) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create graphics pipeline!");
-	}
-
-	vkDestroyShaderModule(mLogicalDevice, fragShaderModule, nullptr);
-	vkDestroyShaderModule(mLogicalDevice, vertShaderModule, nullptr);
 }
 
 VkShaderModule App::CreateShaderModule(const std::vector<char>& _code) const {
@@ -1668,7 +1402,8 @@ void App::CreateDescriptorPool() {
 }
 
 void App::CreateDescriptorSets() {
-	std::vector<VkDescriptorSetLayout> layouts(gMaxFramesInFlight, mDescriptorSetLayout);
+	const VkDescriptorSetLayout& globalLayout = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Global);
+	std::vector<VkDescriptorSetLayout> layouts(gMaxFramesInFlight, globalLayout);
 
 	VkDescriptorSetAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1835,7 +1570,14 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 	// -- Render Pass --
 	vkCmdBeginRenderPass(_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
-		vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
+		// Bind descriptor sets - this is for uniform buffers
+
+		// Eventually, this will only be called at the beginning of each sub-pass,
+		// where we also will switch pipeline layout
+		const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
+		vkCmdBindDescriptorSets(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &mDescriptorSets[mCurrentFrame], 0, nullptr);
+
+		mTempShader->BindShaderResources(_commandBuffer);
 
 		// Since viewport and scissor state are dynamic, we need to
 		// explicitly set them before we can issue a draw command
@@ -1855,21 +1597,11 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 		};
 		vkCmdSetScissor(_commandBuffer, 0, 1, &scissor);
 
-		// Bind vertex buffers + their offsets
-		VkBuffer vertexBuffers[] = {
-			mVertexBuffer
-		};
-
-		VkDeviceSize offsets[] = {
-			0
-		};
-
 		// Bind buffers
-		vkCmdBindVertexBuffers(_commandBuffer, 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(_commandBuffer, mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		static const VkDeviceSize zeroOffset = 0;
 
-		// Bind descriptor sets - this is for uniform buffers
-		vkCmdBindDescriptorSets(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[mCurrentFrame], 0, nullptr);
+		vkCmdBindVertexBuffers(_commandBuffer, 0, 1, &mVertexBuffer, &zeroOffset);
+		vkCmdBindIndexBuffer(_commandBuffer, mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 		// Draw the vertices in the vertex buffer, using the index buffer
 		vkCmdDrawIndexed(_commandBuffer, static_cast<uint32_t>(mIndices.size()), 1, 0, 0, 0);
@@ -2114,16 +1846,11 @@ void App::Cleanup() {
 
 	vkDestroyDescriptorPool(mLogicalDevice, mDescriptorPool, nullptr);
 
-	vkDestroyDescriptorSetLayout(mLogicalDevice, mDescriptorSetLayout, nullptr);
-
 	vkDestroyBuffer(mLogicalDevice, mIndexBuffer, nullptr);
 	vkFreeMemory(mLogicalDevice, mIndexBufferMemory, nullptr);
 
 	vkDestroyBuffer(mLogicalDevice, mVertexBuffer, nullptr);
 	vkFreeMemory(mLogicalDevice, mVertexBufferMemory, nullptr);
-
-	vkDestroyPipeline(mLogicalDevice, mGraphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(mLogicalDevice, mPipelineLayout, nullptr);
 
 	for (size_t i = 0; i < mRenderPasses.size(); i++) {
 		vkDestroyRenderPass(mLogicalDevice, mRenderPasses[i], nullptr);
@@ -2143,6 +1870,7 @@ void App::Cleanup() {
 	vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
 
 	PipelineLayoutManager::Shutdown();
+	delete mTempShader;
 
 	vkDestroyDevice(mLogicalDevice, nullptr);
 

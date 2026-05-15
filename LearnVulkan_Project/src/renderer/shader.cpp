@@ -43,6 +43,10 @@ Shader::~Shader() {
 	vkDestroyPipeline(App::GetInstance().GetLogicalDevice(), mPipeline, nullptr);
 }
 
+void Shader::BindShaderResources(const VkCommandBuffer& _commandBuffer) const {
+	vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
+}
+
 VkShaderModule Shader::CreateModule(const ShaderStage& _stage, const std::vector<char>& _shaderCode) {
 	VkShaderModuleCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -136,8 +140,8 @@ void Shader::CreatePipeline(const std::vector<VkPipelineShaderStageCreateInfo>& 
 		.pColorBlendState = &preset.colorBlendState,
 		.pDynamicState = &dynamicState,
 		.layout = pipelineLayoutManagerInst.GetLayoutForModel(mBlendModel, mShadingModel),
-		.renderPass = appInst.GetRenderPass(preset.renderPassIndex),
-		.subpass = preset.subpassIndex,
+		.renderPass = appInst.GetRenderPass(static_cast<size_t>(preset.shading)),
+		.subpass = static_cast<uint32_t>(preset.shading),
 	};
 
 	// This function call can actually be used to create multiple
