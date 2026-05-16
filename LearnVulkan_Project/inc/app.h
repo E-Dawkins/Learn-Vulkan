@@ -12,8 +12,8 @@
 #include <optional>
 #include <vector>
 
-#include "renderer/mesh.h"
-#include "renderer/shader.h"
+class Mesh;
+class Shader;
 
 struct QueueFamilyIndices
 {

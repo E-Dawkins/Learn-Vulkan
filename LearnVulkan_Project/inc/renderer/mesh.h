@@ -10,6 +10,8 @@
 #include "utils/file_reader.h"
 #include "utils/hash_utils.h"
 
+class Shader;
+
 struct Vertex
 {
 	glm::vec3 pos;
@@ -46,10 +48,15 @@ private:
 	VkBuffer mIndexBuffer;
 	VkDeviceMemory mIndexBufferMemory;
 
+	Shader* mShader;
+
 public:
 	Mesh(const std::filesystem::path& _filePath);
 	~Mesh();
 
+	void SetShader(Shader* _shader);
+
+	void BindMeshResources(const VkCommandBuffer& _commandBuffer) const;
 	void DrawMesh(const VkCommandBuffer& _commandBuffer) const;
 
 private:

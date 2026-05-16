@@ -4,6 +4,7 @@
 #include "pch.h"
 
 #include "app.h"
+#include "renderer/mesh.h"
 #include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
 #include "utils/vulkan_ext_funcs.h"
@@ -95,6 +96,7 @@ void App::InitVulkan() {
 	CreateTextureSampler();
 	
 	mTempMesh = new Mesh("assets/models/viking_room.obj");
+	mTempMesh->SetShader(mTempShader);
 
 	CreateUniformBuffers();
 	CreateDescriptorPool();
@@ -1463,14 +1465,15 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 	// -- Render Pass --
 	vkCmdBeginRenderPass(_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
+		// This is where the shader (pipeline) and vertex/index buffers get bound for this frame
+		mTempMesh->BindMeshResources(_commandBuffer);
+
 		// Bind descriptor sets - this is for uniform buffers
 
 		// Eventually, this will only be called at the beginning of each sub-pass,
 		// where we also will switch pipeline layout
 		const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
 		vkCmdBindDescriptorSets(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &mDescriptorSets[mCurrentFrame], 0, nullptr);
-
-		mTempShader->BindShaderResources(_commandBuffer);
 
 		// Since viewport and scissor state are dynamic, we need to
 		// explicitly set them before we can issue a draw command
@@ -1490,6 +1493,7 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 		};
 		vkCmdSetScissor(_commandBuffer, 0, 1, &scissor);
 
+		// This is where the actual draw call happens for our mesh
 		mTempMesh->DrawMesh(_commandBuffer);
 	}
 	vkCmdEndRenderPass(_commandBuffer);

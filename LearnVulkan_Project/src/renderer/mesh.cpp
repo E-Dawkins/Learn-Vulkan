@@ -2,6 +2,7 @@
 #include "renderer/mesh.h"
 
 #include "app.h"
+#include "renderer/shader.h"
 #include "utils/buffer_utils.h"
 
 VkVertexInputBindingDescription Vertex::GetBindingDescription() {
@@ -66,13 +67,24 @@ Mesh::~Mesh() {
 	vkFreeMemory(logicalDevice, mVertexBufferMemory, nullptr);
 }
 
-void Mesh::DrawMesh(const VkCommandBuffer& _commandBuffer) const {
+void Mesh::SetShader(Shader* _shader) {
+	// TODO - this is temporary, just to contain main drawing logic in one place
+	assert(_shader);
+
+	mShader = _shader;
+}
+
+void Mesh::BindMeshResources(const VkCommandBuffer& _commandBuffer) const {
+	mShader->BindShaderResources(_commandBuffer);
+
 	// Bind buffers
 	static const VkDeviceSize zeroOffset = 0;
 
 	vkCmdBindVertexBuffers(_commandBuffer, 0, 1, &mVertexBuffer, &zeroOffset);
 	vkCmdBindIndexBuffer(_commandBuffer, mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+}
 
+void Mesh::DrawMesh(const VkCommandBuffer& _commandBuffer) const {
 	// Draw the vertices in the vertex buffer, using the index buffer
 	vkCmdDrawIndexed(_commandBuffer, static_cast<uint32_t>(mIndices.size()), 1, 0, 0, 0);
 }
