@@ -66,12 +66,6 @@ private:
 	std::vector<VkFramebuffer> mSwapChainFramebuffers;
 	std::vector<VkRenderPass> mRenderPasses;
 	VkCommandPool mCommandPool;
-	std::vector<Vertex> mVertices;
-	std::vector<uint32_t> mIndices;
-	VkBuffer mVertexBuffer;
-	VkDeviceMemory mVertexBufferMemory;
-	VkBuffer mIndexBuffer;
-	VkDeviceMemory mIndexBufferMemory;
 	std::vector<VkBuffer> mUniformBuffers;
 	std::vector<VkDeviceMemory> mUniformBuffersMemory;
 	std::vector<void*> mUniformBuffersMapped;
@@ -98,6 +92,7 @@ private:
 	VkImageView mColorImageView;
 
 	Shader* mTempShader;
+	Mesh* mTempMesh;
 
 public:
 	bool framebufferResized = false;
@@ -105,12 +100,16 @@ public:
 public:
 	void Run();
 
+	const VkPhysicalDevice& GetPhysicalDevice() const { return mPhysicalDevice; }
 	const VkDevice& GetLogicalDevice() const { return mLogicalDevice; }
 	const MultisampleState& GetMsaaState() const { return mMsaaState; }
 	const VkRenderPass& GetRenderPass(size_t _index) const {
 		assert(_index < mRenderPasses.size());
 		return mRenderPasses[_index];
 	}
+
+	VkCommandBuffer BeginSingleTimeCommands() const;
+	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;
 
 private:
 	void InitWindow();
@@ -137,7 +136,6 @@ private:
 	VkImageView CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags, uint32_t _mipLevels) const;
 	void CreateImageViews();
 	void CreateRenderPass();
-	void CreateGraphicsPipeline();
 	VkShaderModule CreateShaderModule(const std::vector<char>& _code) const;
 	void CreateFramebuffers();
 	void CreateCommandPool();
@@ -155,16 +153,11 @@ private:
 	void CreateTextureImage();
 	void CreateTextureImageView();
 	void CreateTextureSampler();
-	void LoadModel();
-	void CreateVertexBuffer();
-	void CreateIndexBuffer();
 	void CreateUniformBuffers();
 	void CreateDescriptorPool();
 	void CreateDescriptorSets();
 	uint32_t FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const;
 	void CreateCommandBuffers();
-	VkCommandBuffer BeginSingleTimeCommands() const;
-	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;
 	void RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) const;
 	void CreateSyncObjects();
 	void RecreateSwapChain();

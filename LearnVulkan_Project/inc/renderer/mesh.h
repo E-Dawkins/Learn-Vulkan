@@ -7,6 +7,7 @@
 
 #include <array>
 
+#include "utils/file_reader.h"
 #include "utils/hash_utils.h"
 
 struct Vertex
@@ -35,7 +36,24 @@ namespace std {
 	};
 }
 
-class Mesh
+class Mesh : IFileReader
 {
+private:
+	std::vector<Vertex> mVertices;
+	std::vector<uint32_t> mIndices;
+	VkBuffer mVertexBuffer;
+	VkDeviceMemory mVertexBufferMemory;
+	VkBuffer mIndexBuffer;
+	VkDeviceMemory mIndexBufferMemory;
 
+public:
+	Mesh(const std::filesystem::path& _filePath);
+	~Mesh();
+
+	void DrawMesh(const VkCommandBuffer& _commandBuffer) const;
+
+private:
+	void LoadFromFile(const std::filesystem::path& _filePath);
+	void CreateVertexBuffer();
+	void CreateIndexBuffer();
 };
