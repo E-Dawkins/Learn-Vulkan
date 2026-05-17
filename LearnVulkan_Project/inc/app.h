@@ -14,6 +14,7 @@
 
 class Mesh;
 class Shader;
+class Texture;
 
 struct QueueFamilyIndices
 {
@@ -76,11 +77,9 @@ private:
 	std::vector<VkSemaphore> mRenderFinishedSemaphores; // signal that rendering has finished
 	std::vector<VkFence> mInFlightFences; // make sure only one frame is rendering at a time
 	uint32_t mCurrentFrame = 0;
-	uint32_t mMipLevels;
-	VkImage mTextureImage;
-	VkDeviceMemory mTextureImageMemory;
-	VkImageView mTextureImageView;
+
 	VkSampler mTextureSampler;
+
 	VkImage mDepthImage;
 	VkDeviceMemory mDepthImageMemory;
 	VkImageView mDepthImageView;
@@ -93,6 +92,7 @@ private:
 
 	Shader* mTempShader;
 	Mesh* mTempMesh;
+	Texture* mTempTexture;
 
 public:
 	bool framebufferResized = false;
@@ -133,25 +133,15 @@ private:
 	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& _availablePresentModes);
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& _capabilities);
 	void CreateSwapChain();
-	VkImageView CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags, uint32_t _mipLevels) const;
 	void CreateImageViews();
 	void CreateRenderPass();
-	VkShaderModule CreateShaderModule(const std::vector<char>& _code) const;
 	void CreateFramebuffers();
 	void CreateCommandPool();
-	void CreateBuffer(VkDeviceSize _size, VkBufferUsageFlags _usage, VkMemoryPropertyFlags _properties, VkBuffer& _buffer, VkDeviceMemory& _bufferMemory) const;
-	void CopyBuffer(VkBuffer _srcBuffer, VkBuffer _dstBuffer, VkDeviceSize _size) const;
-	void CreateImage(uint32_t _width, uint32_t _height, uint32_t _mipLevels, VkSampleCountFlagBits _numSamples, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) const;
-	void TransitionImageLayout(VkImage _image, VkFormat _format, VkImageLayout _oldLayout, VkImageLayout _newLayout, uint32_t _mipLevels);
-	void CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32_t _width, uint32_t _height);
 	VkFormat FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkImageTiling _tiling, VkFormatFeatureFlags _features) const;
 	void CreateColorResources();
 	VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat _format);
 	void CreateDepthResources();
-	void GenerateMipMaps(VkImage _image, VkFormat _imageFormat, int32_t _texWidth, int32_t _texHeight, uint32_t _mipLevels);
-	void CreateTextureImage();
-	void CreateTextureImageView();
 	void CreateTextureSampler();
 	void CreateUniformBuffers();
 	void CreateDescriptorPool();

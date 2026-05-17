@@ -7,18 +7,17 @@
 #include "renderer/mesh.h"
 #include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
+#include "renderer/texture.h"
+#include "utils/buffer_utils.h"
+#include "utils/image_utils.h"
 #include "utils/vulkan_ext_funcs.h"
 
 #include <algorithm>
 #include <chrono>
 
-static App* gInstance = nullptr;
-
 const uint32_t gWidth = 800;
 const uint32_t gHeight = 600;
 const int gMaxFramesInFlight = 2;
-
-const std::string gTexturePath = "assets/textures/viking_room.png";
 
 const std::vector<const char*> gValidationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -91,8 +90,9 @@ void App::InitVulkan() {
 	CreateColorResources();
 	CreateDepthResources();
 	CreateFramebuffers();
-	CreateTextureImage();
-	CreateTextureImageView();
+
+	mTempTexture = new Texture("assets/textures/viking_room.png");
+
 	CreateTextureSampler();
 	
 	mTempMesh = new Mesh("assets/models/viking_room.obj");
@@ -577,40 +577,11 @@ void App::CreateSwapChain() {
 	mSwapChainExtent = extent;
 }
 
-VkImageView App::CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags, uint32_t _mipLevels) const {
-	VkImageViewCreateInfo viewInfo = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = _image,
-
-		// These specify how the image data is interpreted
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
-		.format = _format,
-
-		// This describes what the image purpose is, and which
-		// part of the image should be accessed. For now our image
-		// contains no mip levels or multiple layers
-		.subresourceRange = {
-			.aspectMask = _aspectFlags,
-			.baseMipLevel = 0,
-			.levelCount = _mipLevels,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		}
-	};
-
-	VkImageView imageView = {};
-	if (vkCreateImageView(mLogicalDevice, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create image view!");
-	}
-
-	return imageView;
-}
-
 void App::CreateImageViews() {
 	mSwapChainImageViews.resize(mSwapChainImages.size());
 
 	for (uint32_t i = 0; i < mSwapChainImages.size(); i++) {
-		mSwapChainImageViews[i] = CreateImageView(mSwapChainImages[i], mSwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		mSwapChainImageViews[i] = Utils::ImageUtils::CreateImageView(mSwapChainImages[i], mSwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 }
 
@@ -712,21 +683,6 @@ void App::CreateRenderPass() {
 	}
 }
 
-VkShaderModule App::CreateShaderModule(const std::vector<char>& _code) const {
-	VkShaderModuleCreateInfo createInfo = {
-		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		.codeSize = _code.size(),
-		.pCode = reinterpret_cast<const uint32_t*>(_code.data())
-	};
-
-	VkShaderModule shaderModule = {};
-	if (vkCreateShaderModule(mLogicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create shader module!");
-	}
-
-	return shaderModule;
-}
-
 void App::CreateFramebuffers() {
 	mSwapChainFramebuffers.resize(mSwapChainImageViews.size());
 
@@ -767,188 +723,6 @@ void App::CreateCommandPool() {
 	}
 }
 
-void App::CreateBuffer(VkDeviceSize _size, VkBufferUsageFlags _usage, VkMemoryPropertyFlags _properties, VkBuffer& _buffer, VkDeviceMemory& _bufferMemory) const {
-	VkBufferCreateInfo bufferInfo = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = _size,
-		.usage = _usage,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-	};
-
-	if (vkCreateBuffer(mLogicalDevice, &bufferInfo, nullptr, &_buffer) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create buffer!");
-	}
-
-	VkMemoryRequirements memRequirements = {};
-	vkGetBufferMemoryRequirements(mLogicalDevice, _buffer, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, _properties)
-	};
-
-	if (vkAllocateMemory(mLogicalDevice, &allocInfo, nullptr, &_bufferMemory) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to allocate buffer memory!");
-	}
-
-	vkBindBufferMemory(mLogicalDevice, _buffer, _bufferMemory, 0);
-}
-
-void App::CopyBuffer(VkBuffer _srcBuffer, VkBuffer _dstBuffer, VkDeviceSize _size) const {
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	// Record copy command
-	{
-		VkBufferCopy copyRegion = {
-			.srcOffset = 0, // optional
-			.dstOffset = 0, // optional
-			.size = _size,
-		};
-
-		vkCmdCopyBuffer(commandBuffer, _srcBuffer, _dstBuffer, 1, &copyRegion);
-	}
-	
-	EndSingleTimeCommands(commandBuffer);
-}
-
-void App::CreateImage(uint32_t _width, uint32_t _height, uint32_t _mipLevels, VkSampleCountFlagBits _numSamples, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) const {
-	VkImageCreateInfo imageInfo = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.flags = 0,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = _format,
-		.extent = {
-			.width = _width,
-			.height = _height,
-			.depth = 1
-		},
-		.mipLevels = _mipLevels,
-		.arrayLayers = 1,
-		.samples = _numSamples,
-		.tiling = _tiling,
-		.usage = _usage,
-
-		// Image only used by one queue family
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-
-		// We do not care about the initial layout, as we are copying to it
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-	};
-
-	if (vkCreateImage(mLogicalDevice, &imageInfo, nullptr, &_image) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create image!");
-	}
-
-	VkMemoryRequirements memRequirements = {};
-	vkGetImageMemoryRequirements(mLogicalDevice, _image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = memRequirements.size,
-		.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, _properties)
-	};
-
-	if (vkAllocateMemory(mLogicalDevice, &allocInfo, nullptr, &_imageMemory) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to allocate image memory!");
-	}
-
-	vkBindImageMemory(mLogicalDevice, _image, _imageMemory, 0);
-}
-
-void App::TransitionImageLayout(VkImage _image, VkFormat /*_format*/, VkImageLayout _oldLayout, VkImageLayout _newLayout, uint32_t _mipLevels) {
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkImageMemoryBarrier barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.oldLayout = _oldLayout,
-		.newLayout = _newLayout,
-
-		// Indicate we are not transferring queue family ownership,
-		// this is not the default behaviour!
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-
-		.image = _image,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = _mipLevels,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		},
-	};
-
-	VkPipelineStageFlags srcStage = {}, dstStage = {};
-
-	// Undefined => transfer destination
-	if (_oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && _newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}
-	// Transfer destination => shader reading
-	else if (_oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && _newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	// Unknown
-	else {
-		throw std::invalid_argument("Unsupported layout transition!");
-	}
-
-	vkCmdPipelineBarrier(
-		commandBuffer, 
-		srcStage, dstStage,
-		0, 
-		0, nullptr, // memory barriers
-		0, nullptr, // buffer memory barries
-		1, &barrier // image memory barriers
-	);
-
-	EndSingleTimeCommands(commandBuffer);
-}
-
-void App::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32_t _width, uint32_t _height) {
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	// Specify the region of the buffer copied to which part of the image
-	VkBufferImageCopy region = {
-		// Byte offset in the buffer that pixel data starts
-		.bufferOffset = 0,
-
-		// How are pixels laid out in memory?
-		.bufferRowLength = 0,
-		.bufferImageHeight = 0,
-
-		// Which part of the image are we copying the pixels into?
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		},
-		.imageOffset = { 0, 0, 0 },
-		.imageExtent = { _width, _height, 1 }
-	};
-
-	vkCmdCopyBufferToImage(
-		commandBuffer,
-		_buffer,
-		_image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1,
-		&region
-	);
-
-	EndSingleTimeCommands(commandBuffer);
-}
-
 VkFormat App::FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkImageTiling _tiling, VkFormatFeatureFlags _features) const {
 	for (VkFormat format : _candidates) {
 		VkFormatProperties props = {};
@@ -968,7 +742,7 @@ VkFormat App::FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkIm
 void App::CreateColorResources() {
 	VkFormat colorFormat = mSwapChainImageFormat;
 
-	CreateImage(
+	Utils::ImageUtils::CreateImage(
 		mSwapChainExtent.width,
 		mSwapChainExtent.height,
 		1,
@@ -981,9 +755,7 @@ void App::CreateColorResources() {
 		mColorImageMemory
 	);
 
-	mColorImageView = CreateImageView(mColorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-
-
+	mColorImageView = Utils::ImageUtils::CreateImageView(mColorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
 VkFormat App::FindDepthFormat() {
@@ -1001,7 +773,7 @@ bool App::HasStencilComponent(VkFormat _format) {
 void App::CreateDepthResources() {
 	VkFormat depthFormat = FindDepthFormat();
 
-	CreateImage(
+	Utils::ImageUtils::CreateImage(
 		mSwapChainExtent.width,
 		mSwapChainExtent.height,
 		1,
@@ -1014,191 +786,7 @@ void App::CreateDepthResources() {
 		mDepthImageMemory
 	);
 
-	mDepthImageView = CreateImageView(mDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
-}
-
-void App::GenerateMipMaps(VkImage _image, VkFormat _imageFormat, int32_t _texWidth, int32_t _texHeight, uint32_t _mipLevels) {
-	// Check if image format supports linear blitting
-	VkFormatProperties formatProperties = {};
-	vkGetPhysicalDeviceFormatProperties(mPhysicalDevice, _imageFormat, &formatProperties);
-
-	if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
-		throw std::runtime_error("Texture image format does not support linear blitting!");
-	}
-	
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkImageMemoryBarrier barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = _image,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		}
-	};
-
-	int32_t mipWidth = _texWidth, mipHeight = _texHeight;
-
-	for (uint32_t i = 1; i < mMipLevels; i++) {
-		barrier.subresourceRange.baseMipLevel = i - 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-			0, nullptr, // memory barriers
-			0, nullptr, // buffer memory barriers
-			1, &barrier // image memory barriers
-		);
-
-		// Specify the regions that will be copied from / to
-		VkImageBlit blit = {
-			.srcSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = i - 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.srcOffsets = {
-				{ 0, 0, 0 },
-				{ mipWidth, mipHeight, 1 }
-			},
-			.dstSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = i,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.dstOffsets = {
-				{ 0, 0, 0 },
-				{ (mipWidth > 1 ? mipWidth / 2 : 1), (mipHeight > 1 ? mipHeight / 2 : 1), 1 }
-			},
-		};
-
-		vkCmdBlitImage(commandBuffer,
-			_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			1, &blit,
-			VK_FILTER_LINEAR
-		);
-
-		// Transition mip level to shader read only
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-			0, nullptr, // memory barriers
-			0, nullptr, // buffer memory barriers
-			1, &barrier // image memory barriers
-		);
-
-		if (mipWidth > 1) mipWidth /= 2;
-		if (mipHeight > 1) mipHeight /= 2;
-	}
-
-	// Transition mip level to shader read only
-	barrier.subresourceRange.baseMipLevel = _mipLevels - 1;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	vkCmdPipelineBarrier(commandBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-		0, nullptr, // memory barriers
-		0, nullptr, // buffer memory barriers
-		1, &barrier // image memory barriers
-	);
-
-	EndSingleTimeCommands(commandBuffer);
-}
-
-void App::CreateTextureImage() {
-	int texWidth = 0, texHeight = 0, texChannels = 0;
-	stbi_uc* pixels = stbi_load(gTexturePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-
-	// 4 bytes per pixel
-	VkDeviceSize imageSize = static_cast<VkDeviceSize>(texWidth * texHeight * 4);
-
-	if (!pixels) {
-		throw std::runtime_error("Failed to load texture image!");
-	}
-
-	// Create staging buffer
-	VkBuffer stagingBuffer = {};
-	VkDeviceMemory stagingBufferMemory = {};
-	CreateBuffer(
-		imageSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		stagingBuffer,
-		stagingBufferMemory
-	);
-
-	// Copy pixel data into device local memory
-	void* data;
-	vkMapMemory(mLogicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-	memcpy(data, pixels, static_cast<size_t>(imageSize));
-	vkUnmapMemory(mLogicalDevice, stagingBufferMemory);
-
-	// Free pixel data
-	stbi_image_free(pixels);
-
-	mMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-
-	CreateImage(
-		texWidth, 
-		texHeight,
-		mMipLevels,
-		VK_SAMPLE_COUNT_1_BIT,
-		VK_FORMAT_R8G8B8A8_SRGB,
-
-		// Image object is optimal for shader access
-		VK_IMAGE_TILING_OPTIMAL,
-
-		// Source / destination for a buffer copy, and sampled in the shader
-		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		mTextureImage,
-		mTextureImageMemory
-	);
-
-	// Copy the staging buffer into the texture image
-	TransitionImageLayout(
-		mTextureImage, 
-		VK_FORMAT_R8G8B8A8_SRGB, 
-		VK_IMAGE_LAYOUT_UNDEFINED, 
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		mMipLevels
-	);
-
-	CopyBufferToImage(
-		stagingBuffer,
-		mTextureImage,
-		static_cast<uint32_t>(texWidth),
-		static_cast<uint32_t>(texHeight)
-	);
-
-	// Transition image for shader access is handled
-	// for each mip level when generating them
-	GenerateMipMaps(mTextureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, mMipLevels);
-
-	vkDestroyBuffer(mLogicalDevice, stagingBuffer, nullptr);
-	vkFreeMemory(mLogicalDevice, stagingBufferMemory, nullptr);
-}
-
-void App::CreateTextureImageView() {
-	mTextureImageView = CreateImageView(mTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mMipLevels);
+	mDepthImageView = Utils::ImageUtils::CreateImageView(mDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
 void App::CreateTextureSampler() {
@@ -1255,7 +843,7 @@ void App::CreateUniformBuffers() {
 	mUniformBuffersMapped.resize(gMaxFramesInFlight);
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
-		CreateBuffer(
+		Utils::BufferUtils::CreateBuffer(
 			bufferSize,
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -1324,7 +912,7 @@ void App::CreateDescriptorSets() {
 		// Which image and sampler? And the layout of the image
 		VkDescriptorImageInfo imageInfo = {
 			.sampler = mTextureSampler,
-			.imageView = mTextureImageView,
+			.imageView = mTempTexture->GetImageView(),
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -1725,9 +1313,8 @@ void App::Cleanup() {
 	CleanupSwapChain();
 
 	vkDestroySampler(mLogicalDevice, mTextureSampler, nullptr);
-	vkDestroyImageView(mLogicalDevice, mTextureImageView, nullptr);
-	vkDestroyImage(mLogicalDevice, mTextureImage, nullptr);
-	vkFreeMemory(mLogicalDevice, mTextureImageMemory, nullptr);
+
+	delete mTempTexture;
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
 		vkDestroyBuffer(mLogicalDevice, mUniformBuffers[i], nullptr);
