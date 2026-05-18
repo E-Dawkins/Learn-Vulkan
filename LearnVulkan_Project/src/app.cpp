@@ -90,19 +90,29 @@ void App::InitVulkan() {
 	CreateColorResources();
 	CreateDepthResources();
 	CreateFramebuffers();
-
-	mTempTexture = new Texture("assets/textures/viking_room.png");
-
-	CreateTextureSampler();
 	
 	mTempMesh = new Mesh("assets/models/viking_room.obj");
 	mTempMesh->SetShader(mTempShader);
 
 	CreateUniformBuffers();
+
 	CreateDescriptorPool();
-	CreateDescriptorSets();
+	CreateFrameDescriptorSets();
+	CreateMaterialDescriptorSet();
+
 	CreateCommandBuffers();
 	CreateSyncObjects();
+
+	// Create/load all our textures
+	mTempTextureArray = {
+		new Texture("assets/textures/viking_room.png"),
+		new Texture("assets/textures/texture.jpg"),
+	};
+	
+	// Update material descriptor set with newly loaded textures
+	for (Texture* tex : mTempTextureArray) {
+		InsertTextureInDescriptorSet(tex);
+	}
 }
 
 void App::CreateInstance() {
@@ -830,13 +840,14 @@ void App::CreateTextureSampler() {
 
 	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
-	if (vkCreateSampler(mLogicalDevice, &samplerInfo, nullptr, &mTextureSampler) != VK_SUCCESS) {
+	mTextureSamplers.push_back({});
+	if (vkCreateSampler(mLogicalDevice, &samplerInfo, nullptr, &mTextureSamplers.back()) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create texture sampler!");
 	}
 }
 
 void App::CreateUniformBuffers() {
-	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+	VkDeviceSize bufferSize = sizeof(CameraData);
 
 	mUniformBuffers.resize(gMaxFramesInFlight);
 	mUniformBuffersMemory.resize(gMaxFramesInFlight);
@@ -857,16 +868,9 @@ void App::CreateUniformBuffers() {
 
 void App::CreateDescriptorPool() {
 	// What type of descriptors our sets will contain, and how many
-	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
-
-	poolSizes[0] = {
-		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = static_cast<uint32_t>(gMaxFramesInFlight)
-	};
-
-	poolSizes[1] = {
-		.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = static_cast<uint32_t>(gMaxFramesInFlight)
+	std::array<VkDescriptorPoolSize, 2> poolSizes = {
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(gMaxFramesInFlight) }, // per-frame UBOs
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mMaxTextureCount } // texSampler[]
 	};
 
 	// We have already said how many descriptors are available,
@@ -874,9 +878,13 @@ void App::CreateDescriptorPool() {
 	// be allocated via '.maxSets'
 	VkDescriptorPoolCreateInfo poolInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = static_cast<uint32_t>(gMaxFramesInFlight),
+
+		// Allows us to free individual sets, instead of having to free the entire pool
+		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+
+		.maxSets = static_cast<uint32_t>(gMaxFramesInFlight) + 1, // +1 for the texSampler[] (this is temp.)
 		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-		.pPoolSizes = poolSizes.data()
+		.pPoolSizes = poolSizes.data(),
 	};
 
 	if (vkCreateDescriptorPool(mLogicalDevice, &poolInfo, nullptr, &mDescriptorPool) != VK_SUCCESS) {
@@ -884,43 +892,34 @@ void App::CreateDescriptorPool() {
 	}
 }
 
-void App::CreateDescriptorSets() {
-	const VkDescriptorSetLayout& globalLayout = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Global);
-	std::vector<VkDescriptorSetLayout> layouts(gMaxFramesInFlight, globalLayout);
+void App::CreateFrameDescriptorSets() {
+	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Global);
+	std::vector<VkDescriptorSetLayout> layouts(gMaxFramesInFlight, layoutPreset);
 
-	VkDescriptorSetAllocateInfo allocInfo = {
+	VkDescriptorSetAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = mDescriptorPool,
 		.descriptorSetCount = static_cast<uint32_t>(gMaxFramesInFlight),
 		.pSetLayouts = layouts.data()
 	};
 
-	mDescriptorSets.resize(gMaxFramesInFlight);
-	if (vkAllocateDescriptorSets(mLogicalDevice, &allocInfo, mDescriptorSets.data()) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to allocate descriptor sets!");
+	mFrameDescriptorSets.resize(gMaxFramesInFlight);
+	if (vkAllocateDescriptorSets(mLogicalDevice, &allocInfo, mFrameDescriptorSets.data()) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to allocate frame descriptor sets!");
 	}
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
 		// Which buffer? And where the region within it
 		// that contains the data for the descriptor
-		VkDescriptorBufferInfo bufferInfo = {
+		VkDescriptorBufferInfo bufferInfo{
 			.buffer = mUniformBuffers[i],
 			.offset = 0,
-			.range = sizeof(UniformBufferObject)
+			.range = sizeof(CameraData)
 		};
 
-		// Which image and sampler? And the layout of the image
-		VkDescriptorImageInfo imageInfo = {
-			.sampler = mTextureSampler,
-			.imageView = mTempTexture->GetImageView(),
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-
-		std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
-
-		descriptorWrites[0] = {
+		VkWriteDescriptorSet descriptorWrite{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = mDescriptorSets[i],
+			.dstSet = mFrameDescriptorSets[i],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -928,29 +927,74 @@ void App::CreateDescriptorSets() {
 			.pBufferInfo = &bufferInfo
 		};
 
-		descriptorWrites[1] = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = mDescriptorSets[i],
-			.dstBinding = 1,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &imageInfo
-		};
-
 		// Apply updates - this accepts write arrays, and copy arrays
 		vkUpdateDescriptorSets(
 			mLogicalDevice, 
 
 			// Write array
-			static_cast<uint32_t>(descriptorWrites.size()), 
-			descriptorWrites.data(), 
+			1, 
+			&descriptorWrite, 
 
 			// Copy array
 			0, 
 			nullptr
 		);
 	}
+}
+
+void App::CreateMaterialDescriptorSet() {
+	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Material);
+
+	VkDescriptorSetAllocateInfo allocInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = mDescriptorPool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &layoutPreset
+	};
+
+	if (vkAllocateDescriptorSets(mLogicalDevice, &allocInfo, &mMaterialDescriptorSet) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to allocate material descriptor set!");
+	}
+}
+
+void App::InsertTextureInDescriptorSet(Texture* _tex) {
+	static uint32_t curIndex = 0;
+
+	// We need a new texture sampler for this texture index
+	if (curIndex >= mTextureSamplers.size()) {
+		CreateTextureSampler();
+	}
+
+	VkDescriptorImageInfo imageInfo{
+		.sampler = mTextureSamplers[curIndex],
+		.imageView = _tex->GetImageView(),
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+
+	VkWriteDescriptorSet descriptorWrite{
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = mMaterialDescriptorSet,
+		.dstBinding = 0,
+		.dstArrayElement = curIndex,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = &imageInfo
+	};
+
+	// Apply updates - this accepts write arrays, and copy arrays
+	vkUpdateDescriptorSets(
+		mLogicalDevice,
+
+		// Write array
+		1,
+		&descriptorWrite,
+
+		// Copy array
+		0,
+		nullptr
+	);
+
+	curIndex++;
 }
 
 uint32_t App::FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const {
@@ -1061,7 +1105,17 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 		// Eventually, this will only be called at the beginning of each sub-pass,
 		// where we also will switch pipeline layout
 		const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
-		vkCmdBindDescriptorSets(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &mDescriptorSets[mCurrentFrame], 0, nullptr);
+		std::array<VkDescriptorSet, 2> sets = { mFrameDescriptorSets[mCurrentFrame], mMaterialDescriptorSet };
+
+		vkCmdBindDescriptorSets(
+			_commandBuffer, 
+			VK_PIPELINE_BIND_POINT_GRAPHICS, 
+			layout, 
+			0,										// first descriptor set
+			static_cast<uint32_t>(sets.size()),		// number of descriptor sets
+			sets.data(),							// array of descriptor sets
+			0, nullptr								// no dynamic offsets
+		);
 
 		// Since viewport and scissor state are dynamic, we need to
 		// explicitly set them before we can issue a draw command
@@ -1280,7 +1334,7 @@ void App::UpdateUniformBuffer(uint32_t _currentImage) {
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-	UniformBufferObject ubo = {};
+	CameraData ubo = {};
 	ubo.model = glm::rotate(
 		glm::mat4(1.f),						// inital matrix
 		deltaTime * glm::radians(90.f),		// rotation (in radians)
@@ -1312,9 +1366,13 @@ void App::UpdateUniformBuffer(uint32_t _currentImage) {
 void App::Cleanup() {
 	CleanupSwapChain();
 
-	vkDestroySampler(mLogicalDevice, mTextureSampler, nullptr);
+	for (const auto& texSampler : mTextureSamplers) {
+		vkDestroySampler(mLogicalDevice, texSampler, nullptr);
+	}
 
-	delete mTempTexture;
+	for (Texture* tex : mTempTextureArray) {
+		delete tex;
+	}
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
 		vkDestroyBuffer(mLogicalDevice, mUniformBuffers[i], nullptr);

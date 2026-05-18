@@ -33,7 +33,7 @@ struct SwapChainSupportDetails
 	std::vector<VkPresentModeKHR> presentModes;
 };
 
-struct UniformBufferObject
+struct CameraData
 {
 	alignas(16) glm::mat4 model;
 	alignas(16) glm::mat4 view;
@@ -67,18 +67,23 @@ private:
 	std::vector<VkFramebuffer> mSwapChainFramebuffers;
 	std::vector<VkRenderPass> mRenderPasses;
 	VkCommandPool mCommandPool;
+
 	std::vector<VkBuffer> mUniformBuffers;
 	std::vector<VkDeviceMemory> mUniformBuffersMemory;
 	std::vector<void*> mUniformBuffersMapped;
+
 	VkDescriptorPool mDescriptorPool;
-	std::vector<VkDescriptorSet> mDescriptorSets;
+	std::vector<VkDescriptorSet> mFrameDescriptorSets;
+
+	const uint32_t mMaxTextureCount = 128; // eventually this will be a dynamic count
+	VkDescriptorSet mMaterialDescriptorSet;
+	std::vector<VkSampler> mTextureSamplers;
+
 	std::vector<VkCommandBuffer> mCommandBuffers;
 	std::vector<VkSemaphore> mImageAvailableSemaphores; // signal that an image has been acquired
 	std::vector<VkSemaphore> mRenderFinishedSemaphores; // signal that rendering has finished
 	std::vector<VkFence> mInFlightFences; // make sure only one frame is rendering at a time
 	uint32_t mCurrentFrame = 0;
-
-	VkSampler mTextureSampler;
 
 	VkImage mDepthImage;
 	VkDeviceMemory mDepthImageMemory;
@@ -92,7 +97,7 @@ private:
 
 	Shader* mTempShader;
 	Mesh* mTempMesh;
-	Texture* mTempTexture;
+	std::vector<Texture*> mTempTextureArray;
 
 public:
 	bool framebufferResized = false;
@@ -107,6 +112,7 @@ public:
 		assert(_index < mRenderPasses.size());
 		return mRenderPasses[_index];
 	}
+	uint32_t GetMaxTextureCount() const { return mMaxTextureCount; }
 
 	VkCommandBuffer BeginSingleTimeCommands() const;
 	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;
@@ -143,9 +149,15 @@ private:
 	bool HasStencilComponent(VkFormat _format);
 	void CreateDepthResources();
 	void CreateTextureSampler();
+
 	void CreateUniformBuffers();
+
 	void CreateDescriptorPool();
-	void CreateDescriptorSets();
+	void CreateFrameDescriptorSets();
+
+	void CreateMaterialDescriptorSet();
+	void InsertTextureInDescriptorSet(Texture* _tex);
+
 	uint32_t FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const;
 	void CreateCommandBuffers();
 	void RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) const;

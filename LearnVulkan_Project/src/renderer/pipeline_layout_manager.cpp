@@ -61,36 +61,26 @@ void PipelineLayoutManager::InitPresets() {
 void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 	std::vector<DescriptorSetLayout> setLayouts;
 
+	// Set 0 - globals
 	setLayouts.emplace_back(DescriptorSetLayout{
 		.layoutBindings{
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }, // cameraData
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }, // texSampler
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT } // cameraData
 		}
 	});
 
-	// TODO - use the bindless sets described below
-	
-	//// Set 0 - globals
-	//setLayouts.emplace_back(DescriptorSetLayout{
-	//	.layoutBindings{
-	//		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT } // cameraData
-	//	}
-	//});
+	// Set 1 - material system
+	setLayouts.emplace_back(DescriptorSetLayout{
+		.layoutBindings{
+			//{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // materialParams[]
+			//{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // idtoBindless[]
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, App::GetInstance().GetMaxTextureCount() }, // texSamplers[]
+		}
+	});
 
-	//// Set 1 - material system
+	// Set 2 - mesh data
 	//setLayouts.emplace_back(DescriptorSetLayout{
 	//	.layoutBindings{
-	//		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // materialParams[]
-	//		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // idtoBindless[]
-	//		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // texSamplers[]
-	//	}
-	//});
-
-	//// Set 2 - mesh data
-	//setLayouts.emplace_back(DescriptorSetLayout{
-	//	.layoutBindings{
-	//		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }, // vertexData
-	//		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }, // indicesData
+	//		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }, // meshTransform
 	//	}
 	//});
 
@@ -101,7 +91,7 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 			layoutBindings.emplace_back(VkDescriptorSetLayoutBinding{
 				.binding = static_cast<uint32_t>(layoutBindings.size()),
 				.descriptorType = binding.type,
-				.descriptorCount = 1,
+				.descriptorCount = binding.count,
 				.stageFlags = binding.stage
 			});
 		}

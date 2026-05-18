@@ -16,8 +16,8 @@ enum class ShadingModel
 enum class DescriptorSet
 {
 	Global,
-	/*Material,
-	Mesh*/
+	Material,
+	//Mesh
 };
 
 struct PipelinePreset
@@ -35,6 +35,7 @@ struct DescriptorSetLayout
 	{
 		VkDescriptorType type;
 		VkShaderStageFlags stage;
+		uint32_t count = 1;
 	};
 
 	std::vector<SetLayoutBinding> layoutBindings;
