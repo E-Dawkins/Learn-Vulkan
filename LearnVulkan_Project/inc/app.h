@@ -72,10 +72,11 @@ private:
 	std::vector<VkDeviceMemory> mUniformBuffersMemory;
 	std::vector<void*> mUniformBuffersMapped;
 
-	VkDescriptorPool mDescriptorPool;
+	VkDescriptorPool mFrameDescriptorPool;
 	std::vector<VkDescriptorSet> mFrameDescriptorSets;
 
 	const uint32_t mMaxTextureCount = 128; // eventually this will be a dynamic count
+	VkDescriptorPool mMaterialDescriptorPool;
 	VkDescriptorSet mMaterialDescriptorSet;
 	std::vector<VkSampler> mTextureSamplers;
 
@@ -152,7 +153,8 @@ private:
 
 	void CreateUniformBuffers();
 
-	void CreateDescriptorPool();
+	void CreateDescriptorPools();
+
 	void CreateFrameDescriptorSets();
 
 	void CreateMaterialDescriptorSet();

@@ -36,9 +36,11 @@ struct DescriptorSetLayout
 		VkDescriptorType type;
 		VkShaderStageFlags stage;
 		uint32_t count = 1;
+		VkDescriptorBindingFlags bindingFlags;
 	};
 
 	std::vector<SetLayoutBinding> layoutBindings;
+	VkDescriptorSetLayoutCreateFlags layoutCreateFlags;
 };
 
 class PipelineLayoutManager : public ISingleton<PipelineLayoutManager>

@@ -24,7 +24,8 @@ const std::vector<const char*> gValidationLayers = {
 };
 
 const std::vector<const char*> gDeviceExtensions = {
-	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+	VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
 };
 
 #ifdef NDEBUG
@@ -96,7 +97,7 @@ void App::InitVulkan() {
 
 	CreateUniformBuffers();
 
-	CreateDescriptorPool();
+	CreateDescriptorPools();
 	CreateFrameDescriptorSets();
 	CreateMaterialDescriptorSet();
 
@@ -411,8 +412,34 @@ void App::CreateLogicalDevice() {
 		.samplerAnisotropy = VK_TRUE
 	};
 
+	// Enable some features that are needed for bindless indexing
+	VkPhysicalDeviceDescriptorIndexingFeatures featureDescriptorIndexing{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+
+		// Enable non-uniform array indexing
+		.shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+		.shaderStorageImageArrayNonUniformIndexing = VK_TRUE,
+		.shaderStorageTexelBufferArrayNonUniformIndexing = VK_TRUE,
+
+		// These enable us to update after the 
+		// commandBuffer has used 'vkBindDescriptorSets'
+		.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+		.descriptorBindingStorageImageUpdateAfterBind = VK_TRUE,
+		.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE,
+
+		// Enable non-bound descriptor slots
+		.descriptorBindingPartiallyBound = VK_TRUE,
+
+		// Enable non-sized arrays
+		.runtimeDescriptorArray = VK_TRUE,
+	};
+
 	VkDeviceCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+
+		// Use descriptor indexing features
+		.pNext = &featureDescriptorIndexing,
+
 		.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
 		.pQueueCreateInfos = queueCreateInfos.data(),
 		.enabledExtensionCount = static_cast<uint32_t>(gDeviceExtensions.size()),
@@ -866,29 +893,43 @@ void App::CreateUniformBuffers() {
 	}
 }
 
-void App::CreateDescriptorPool() {
+void App::CreateDescriptorPools() {
+	// ----- Frame descriptor pool -----
 	// What type of descriptors our sets will contain, and how many
-	std::array<VkDescriptorPoolSize, 2> poolSizes = {
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(gMaxFramesInFlight) }, // per-frame UBOs
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mMaxTextureCount } // texSampler[]
-	};
+	VkDescriptorPoolSize framePoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(gMaxFramesInFlight) };
 
 	// We have already said how many descriptors are available,
 	// but we also need to specify how many descriptor sets may
 	// be allocated via '.maxSets'
 	VkDescriptorPoolCreateInfo poolInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-
-		// Allows us to free individual sets, instead of having to free the entire pool
-		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-
-		.maxSets = static_cast<uint32_t>(gMaxFramesInFlight) + 1, // +1 for the texSampler[] (this is temp.)
-		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-		.pPoolSizes = poolSizes.data(),
+		.maxSets = static_cast<uint32_t>(gMaxFramesInFlight),
+		.poolSizeCount = 1,
+		.pPoolSizes = &framePoolSize,
 	};
 
-	if (vkCreateDescriptorPool(mLogicalDevice, &poolInfo, nullptr, &mDescriptorPool) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create descriptor pool!");
+	if (vkCreateDescriptorPool(mLogicalDevice, &poolInfo, nullptr, &mFrameDescriptorPool) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create frame descriptor pool!");
+	}
+
+	// ----- Material descriptor pool -----
+	std::array<VkDescriptorPoolSize, 1> materialPoolSizes = {
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mMaxTextureCount } // texSampler[]
+	};
+
+	poolInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+
+		// Allow updating sets after 'vkBindDescriptorSets'
+		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+
+		.maxSets = 1,
+		.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size()),
+		.pPoolSizes = materialPoolSizes.data(),
+	};
+
+	if (vkCreateDescriptorPool(mLogicalDevice, &poolInfo, nullptr, &mMaterialDescriptorPool) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create material descriptor pool!");
 	}
 }
 
@@ -898,7 +939,7 @@ void App::CreateFrameDescriptorSets() {
 
 	VkDescriptorSetAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = mDescriptorPool,
+		.descriptorPool = mFrameDescriptorPool,
 		.descriptorSetCount = static_cast<uint32_t>(gMaxFramesInFlight),
 		.pSetLayouts = layouts.data()
 	};
@@ -947,7 +988,7 @@ void App::CreateMaterialDescriptorSet() {
 
 	VkDescriptorSetAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = mDescriptorPool,
+		.descriptorPool = mMaterialDescriptorPool,
 		.descriptorSetCount = 1,
 		.pSetLayouts = &layoutPreset
 	};
@@ -1379,7 +1420,8 @@ void App::Cleanup() {
 		vkFreeMemory(mLogicalDevice, mUniformBuffersMemory[i], nullptr);
 	}
 
-	vkDestroyDescriptorPool(mLogicalDevice, mDescriptorPool, nullptr);
+	vkDestroyDescriptorPool(mLogicalDevice, mFrameDescriptorPool, nullptr);
+	vkDestroyDescriptorPool(mLogicalDevice, mMaterialDescriptorPool, nullptr);
 
 	delete mTempMesh;
 

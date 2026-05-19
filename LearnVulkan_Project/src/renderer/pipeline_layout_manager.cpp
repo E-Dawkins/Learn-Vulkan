@@ -73,8 +73,15 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 		.layoutBindings{
 			//{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // materialParams[]
 			//{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // idtoBindless[]
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, App::GetInstance().GetMaxTextureCount() }, // texSamplers[]
-		}
+			// texSamplers[]
+			{
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+				VK_SHADER_STAGE_FRAGMENT_BIT, 
+				App::GetInstance().GetMaxTextureCount(), 
+				VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT, // binding flags
+			}
+		},
+		.layoutCreateFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT
 	});
 
 	// Set 2 - mesh data
@@ -86,6 +93,7 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 
 	for (const auto& layout : setLayouts) {
 		std::vector<VkDescriptorSetLayoutBinding> layoutBindings;
+		std::vector<VkDescriptorBindingFlags> layoutBindingFlags;
 
 		for (const auto& binding : layout.layoutBindings) {
 			layoutBindings.emplace_back(VkDescriptorSetLayoutBinding{
@@ -94,14 +102,28 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 				.descriptorCount = binding.count,
 				.stageFlags = binding.stage
 			});
+
+			layoutBindingFlags.push_back(binding.bindingFlags);
 		}
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingsFlags = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+			.bindingCount = static_cast<uint32_t>(layoutBindingFlags.size()),
+			.pBindingFlags = layoutBindingFlags.data(),
+		};
 
 		VkDescriptorSetLayoutCreateInfo layoutInfo{
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+
+			// Apply flags for each binding
+			.pNext = &setLayoutBindingsFlags,
+
+			// Apply flags to the set layout
+			.flags = layout.layoutCreateFlags,
+
 			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
 			.pBindings = layoutBindings.data()
 		};
-
 
 		mDescriptorSetLayouts.push_back({});
 
