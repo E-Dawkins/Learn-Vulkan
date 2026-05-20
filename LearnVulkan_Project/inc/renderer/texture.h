@@ -1,7 +1,8 @@
 #pragma once
 #include <filesystem>
+#include "utils/asset.h"
 
-class Texture
+class Texture : public IAsset
 {
 private:
 	VkImage mImage;

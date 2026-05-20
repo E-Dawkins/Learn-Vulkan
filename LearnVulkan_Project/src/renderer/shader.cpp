@@ -45,6 +45,15 @@ Shader::~Shader() {
 
 void Shader::BindShaderResources(const VkCommandBuffer& _commandBuffer) const {
 	vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
+	
+	vkCmdPushConstants(
+		_commandBuffer,
+		PipelineLayoutManager::GetInstance().GetLayoutForModel(mBlendModel, mShadingModel),
+		VK_SHADER_STAGE_ALL_GRAPHICS,
+		0,
+		sizeof(PushConstants),
+		&pushConstants
+	);
 }
 
 VkShaderModule Shader::CreateModule(const ShaderStage& _stage, const std::vector<char>& _shaderCode) {

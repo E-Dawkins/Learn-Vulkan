@@ -19,8 +19,17 @@ struct RasterizerState
 	float lineWidth = 1.f;
 };
 
+// TODO: remove from shader header, and somehow make this dynamic
+struct PushConstants
+{
+	uint32_t runtimeId;
+};
+
 class Shader : IFileReader
 {
+public:
+	PushConstants pushConstants;
+
 private:
 	RasterizerState mRasterizerState;
 	BlendModel mBlendModel;

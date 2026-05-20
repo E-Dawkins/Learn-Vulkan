@@ -5,7 +5,7 @@
 #include "utils/buffer_utils.h"
 #include "utils/image_utils.h"
 
-Texture::Texture(const std::filesystem::path& _filePath) {
+Texture::Texture(const std::filesystem::path& _filePath) : IAsset(_filePath) {
 	CreateTextureImage(_filePath);
 
 	mImageView = Utils::ImageUtils::CreateImageView(mImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mMipLevels);

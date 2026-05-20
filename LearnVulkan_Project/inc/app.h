@@ -47,6 +47,31 @@ struct MultisampleState
 	float minSampleShading = 1.f;
 };
 
+struct Ssbo
+{
+private:
+	VkBuffer mBuffer;
+	VkDeviceMemory mDeviceMemory;
+	VkDeviceSize mBufferSize;
+	void* mPersistentMapping;
+
+public:
+	void Init(VkDeviceSize _size);
+	void Reset();
+	void WriteToDescriptorSet(const VkDescriptorSet& _set, uint32_t _binding);
+
+	template<typename T>
+	const size_t Size() const {
+		return mBufferSize / sizeof(T);
+	}
+
+	template<typename T>
+	T& GetElement(size_t _index) const {
+		assert(_index < Size<T>());
+		return reinterpret_cast<T*>(mPersistentMapping)[_index];
+	}
+};
+
 class App : public ISingleton<App>
 {
 private:
@@ -75,10 +100,11 @@ private:
 	VkDescriptorPool mFrameDescriptorPool;
 	std::vector<VkDescriptorSet> mFrameDescriptorSets;
 
-	const uint32_t mMaxTextureCount = 128; // eventually this will be a dynamic count
+	const uint32_t mMaxTextureCount = UINT16_MAX; // eventually this will be a dynamic count
 	VkDescriptorPool mMaterialDescriptorPool;
 	VkDescriptorSet mMaterialDescriptorSet;
 	std::vector<VkSampler> mTextureSamplers;
+	Ssbo mRuntimeToTexIndexSsbo;
 
 	std::vector<VkCommandBuffer> mCommandBuffers;
 	std::vector<VkSemaphore> mImageAvailableSemaphores; // signal that an image has been acquired
@@ -99,6 +125,7 @@ private:
 	Shader* mTempShader;
 	Mesh* mTempMesh;
 	std::vector<Texture*> mTempTextureArray;
+	std::unordered_map<uint64_t, uint32_t> mTempStableToRuntimeIdMap;
 
 public:
 	bool framebufferResized = false;
@@ -157,6 +184,7 @@ private:
 
 	void CreateFrameDescriptorSets();
 
+	void CreateMaterialBuffers();
 	void CreateMaterialDescriptorSet();
 	void InsertTextureInDescriptorSet(Texture* _tex);
 

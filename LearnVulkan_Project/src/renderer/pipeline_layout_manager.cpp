@@ -72,14 +72,18 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 	setLayouts.emplace_back(DescriptorSetLayout{
 		.layoutBindings{
 			//{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // materialParams[]
-			//{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // idtoBindless[]
 			// texSamplers[]
 			{
 				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
 				VK_SHADER_STAGE_FRAGMENT_BIT, 
 				App::GetInstance().GetMaxTextureCount(), 
 				VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT, // binding flags
-			}
+			},
+			// runtimeToTexIndex[]
+			{ 
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 
+				VK_SHADER_STAGE_FRAGMENT_BIT 
+			},
 		},
 		.layoutCreateFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT
 	});
@@ -134,12 +138,22 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 }
 
 void PipelineLayoutManager::CreatePresetLayouts() {
+	// Setup all pipeline layouts to have some amount of push constant range
+	// For now, we just set it up to have the minimum guaranteed amount
+	const VkPushConstantRange pcRange{
+		.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+		.offset = 0,
+		.size = 128 // guaranteed 128-bytes by Vulkan spec
+	};
+
 	for (uint8_t i = 0; i < mPresets.size(); i++) {
 		// This is where descriptor sets / uniforms are bound to the pipeline
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 			.setLayoutCount = static_cast<uint32_t>(mDescriptorSetLayouts.size()),
 			.pSetLayouts = mDescriptorSetLayouts.data(),
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pcRange
 		};
 
 		const PipelinePreset& preset = mPresets[i];

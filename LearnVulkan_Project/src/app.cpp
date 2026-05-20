@@ -34,6 +34,62 @@ const bool gEnableValidationLayers = false;
 const bool gEnableValidationLayers = true;
 #endif
 
+void Ssbo::Init(VkDeviceSize _size) {
+	mBufferSize = _size;
+
+	Utils::BufferUtils::CreateBuffer(
+		_size,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		mBuffer,
+		mDeviceMemory
+	);
+
+	void* mapping = nullptr;
+	vkMapMemory(App::GetInstance().GetLogicalDevice(), mDeviceMemory, 0, VK_WHOLE_SIZE, 0, &mapping);
+	mPersistentMapping = mapping;
+}
+
+void Ssbo::Reset() {
+	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
+
+	vkUnmapMemory(logicalDevice, mDeviceMemory);
+	mPersistentMapping = nullptr;
+
+	vkDestroyBuffer(logicalDevice, mBuffer, nullptr);
+	vkFreeMemory(logicalDevice, mDeviceMemory, nullptr);
+
+}
+
+void Ssbo::WriteToDescriptorSet(const VkDescriptorSet& _set, uint32_t _binding) {
+	VkDescriptorBufferInfo bufferInfo{
+		.buffer = mBuffer,
+		.offset = 0,
+		.range = mBufferSize
+	};
+
+	VkWriteDescriptorSet descriptorWrite{
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = _set,
+		.dstBinding = _binding,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.pBufferInfo = &bufferInfo
+	};
+
+	vkUpdateDescriptorSets(
+		App::GetInstance().GetLogicalDevice(),
+
+		// Write array
+		1,
+		&descriptorWrite,
+
+		// Copy array
+		0,
+		nullptr
+	);
+}
+
 static void FramebufferResizeCallback(GLFWwindow* _window, int /*_width*/, int /*_height*/) {
 	if (App* app = reinterpret_cast<App*>(glfwGetWindowUserPointer(_window))) {
 		app->framebufferResized = true;
@@ -99,21 +155,28 @@ void App::InitVulkan() {
 
 	CreateDescriptorPools();
 	CreateFrameDescriptorSets();
+	CreateMaterialBuffers();
 	CreateMaterialDescriptorSet();
 
 	CreateCommandBuffers();
 	CreateSyncObjects();
 
 	// Create/load all our textures
+	// IT DOES NOT MATTER THE LOAD ORDER ANYMORE, THE STABLE ID => RUNTIME ID WORKS! :)
+	Texture* texStatue = new Texture("assets/textures/texture.jpg");
+	Texture* texVikingRoom = new Texture("assets/textures/viking_room.png");
+	
 	mTempTextureArray = {
-		new Texture("assets/textures/viking_room.png"),
-		new Texture("assets/textures/texture.jpg"),
+		texVikingRoom,
+		texStatue,
 	};
 	
 	// Update material descriptor set with newly loaded textures
 	for (Texture* tex : mTempTextureArray) {
 		InsertTextureInDescriptorSet(tex);
 	}
+
+	mTempShader->pushConstants.runtimeId = mTempStableToRuntimeIdMap[texVikingRoom->GetStableId()];
 }
 
 void App::CreateInstance() {
@@ -913,8 +976,9 @@ void App::CreateDescriptorPools() {
 	}
 
 	// ----- Material descriptor pool -----
-	std::array<VkDescriptorPoolSize, 1> materialPoolSizes = {
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mMaxTextureCount } // texSampler[]
+	std::array<VkDescriptorPoolSize, 2> materialPoolSizes = {
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mMaxTextureCount }, // texSampler[]
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }, // runtimeToTexIndex[]
 	};
 
 	poolInfo = {
@@ -983,6 +1047,10 @@ void App::CreateFrameDescriptorSets() {
 	}
 }
 
+void App::CreateMaterialBuffers() {
+	mRuntimeToTexIndexSsbo.Init(sizeof(uint32_t) * mMaxTextureCount);
+}
+
 void App::CreateMaterialDescriptorSet() {
 	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Material);
 
@@ -996,6 +1064,9 @@ void App::CreateMaterialDescriptorSet() {
 	if (vkAllocateDescriptorSets(mLogicalDevice, &allocInfo, &mMaterialDescriptorSet) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to allocate material descriptor set!");
 	}
+
+	// Initial SSBO mappings
+	mRuntimeToTexIndexSsbo.WriteToDescriptorSet(mMaterialDescriptorSet, 1);
 }
 
 void App::InsertTextureInDescriptorSet(Texture* _tex) {
@@ -1034,6 +1105,14 @@ void App::InsertTextureInDescriptorSet(Texture* _tex) {
 		0,
 		nullptr
 	);
+
+	// Store a mapping from stable id => runtime id
+	mTempStableToRuntimeIdMap[_tex->GetStableId()] = curIndex;
+
+	// Set material ssbo at runtime index => tex index
+	// Note: this may look useless now, but if load order is
+	//       inconsistent, this mapping is required
+	mRuntimeToTexIndexSsbo.GetElement<uint32_t>(curIndex) = curIndex;
 
 	curIndex++;
 }
@@ -1414,6 +1493,8 @@ void App::Cleanup() {
 	for (Texture* tex : mTempTextureArray) {
 		delete tex;
 	}
+
+	mRuntimeToTexIndexSsbo.Reset();
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
 		vkDestroyBuffer(mLogicalDevice, mUniformBuffers[i], nullptr);
