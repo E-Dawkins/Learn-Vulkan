@@ -10,7 +10,7 @@
 #include "utils/file_reader.h"
 #include "utils/hash_utils.h"
 
-class Shader;
+class Material;
 
 struct Vertex
 {
@@ -48,13 +48,13 @@ private:
 	VkBuffer mIndexBuffer;
 	VkDeviceMemory mIndexBufferMemory;
 
-	Shader* mShader;
+	Material* mMaterial;
 
 public:
 	Mesh(const std::filesystem::path& _filePath);
 	~Mesh();
 
-	void SetShader(Shader* _shader);
+	void SetMaterial(Material* _material);
 
 	void BindMeshResources(const VkCommandBuffer& _commandBuffer) const;
 	void DrawMesh(const VkCommandBuffer& _commandBuffer) const;

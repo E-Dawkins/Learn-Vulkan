@@ -12,8 +12,8 @@
 #include <optional>
 #include <vector>
 
+class Material;
 class Mesh;
-class Shader;
 class Texture;
 
 struct QueueFamilyIndices
@@ -122,7 +122,7 @@ private:
 	VkDeviceMemory mColorImageMemory;
 	VkImageView mColorImageView;
 
-	Shader* mTempShader;
+	Material* mTempMaterial;
 	Mesh* mTempMesh;
 	std::vector<Texture*> mTempTextureArray;
 	std::unordered_map<uint64_t, uint32_t> mTempStableToRuntimeIdMap;
@@ -141,6 +141,9 @@ public:
 		return mRenderPasses[_index];
 	}
 	uint32_t GetMaxTextureCount() const { return mMaxTextureCount; }
+
+	// TODO: Remove this, as it is temporary for demo purposes
+	Material* GetMaterial() const { return mTempMaterial; }
 
 	VkCommandBuffer BeginSingleTimeCommands() const;
 	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;

@@ -4,6 +4,7 @@
 #include "pch.h"
 
 #include "app.h"
+#include "renderer/material.h"
 #include "renderer/mesh.h"
 #include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
@@ -90,9 +91,19 @@ void Ssbo::WriteToDescriptorSet(const VkDescriptorSet& _set, uint32_t _binding) 
 	);
 }
 
-static void FramebufferResizeCallback(GLFWwindow* _window, int /*_width*/, int /*_height*/) {
-	if (App* app = reinterpret_cast<App*>(glfwGetWindowUserPointer(_window))) {
-		app->framebufferResized = true;
+static void FramebufferResizeCallback(GLFWwindow* /*_window*/, int /*_width*/, int /*_height*/) {
+	App::GetInstance().framebufferResized = true;
+}
+
+static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _action, int /*_mods*/) {
+	if (_button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS) {
+		uint32_t& texId = App::GetInstance().GetMaterial()->params.runtimeTexIds[0];
+		texId = (texId + 1) % 2;
+	}
+
+	if (_button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS) {
+		uint32_t& intVar = App::GetInstance().GetMaterial()->params.runtimeTexIds[1];
+		intVar = (intVar + 1) % 6;
 	}
 }
 
@@ -117,8 +128,8 @@ void App::InitWindow() {
 	// 4th param => specifies which monitor to open window on
 	// 5th param => specific to OpenGL
 	mWindow = glfwCreateWindow(gWidth, gHeight, "Learn Vulkan", nullptr, nullptr);
-	glfwSetWindowUserPointer(mWindow, this);
 	glfwSetFramebufferSizeCallback(mWindow, FramebufferResizeCallback);
+	glfwSetMouseButtonCallback(mWindow, MouseButtonCallback);
 }
 
 void App::InitVulkan() {
@@ -134,7 +145,7 @@ void App::InitVulkan() {
 	CreateImageViews();
 	CreateRenderPass();
 	
-	mTempShader = new Shader(
+	Shader* shader = new Shader(
 		std::vector<ShaderStage>{
 			ShaderStage{ .filePath = "assets/shaders/shader.vert.spv", .flagBit = VK_SHADER_STAGE_VERTEX_BIT },
 			ShaderStage{ .filePath = "assets/shaders/shader.frag.spv", .flagBit = VK_SHADER_STAGE_FRAGMENT_BIT }
@@ -147,9 +158,6 @@ void App::InitVulkan() {
 	CreateColorResources();
 	CreateDepthResources();
 	CreateFramebuffers();
-	
-	mTempMesh = new Mesh("assets/models/viking_room.obj");
-	mTempMesh->SetShader(mTempShader);
 
 	CreateUniformBuffers();
 
@@ -176,7 +184,25 @@ void App::InitVulkan() {
 		InsertTextureInDescriptorSet(tex);
 	}
 
-	mTempShader->pushConstants.runtimeId = mTempStableToRuntimeIdMap[texVikingRoom->GetStableId()];
+	// Initialize material with viking texture and default params
+	uint32_t runtimeId = mTempStableToRuntimeIdMap[texVikingRoom->GetStableId()];
+	mTempMaterial = new Material(
+		shader,
+		MaterialParams{
+			.runtimeTexIds = { runtimeId, 0 },
+			.colorVars = {
+				glm::vec4(1.f, 1.f, 1.f, 1.f), // WHITE
+				glm::vec4(.05f, .05f, .05f, 1.f), // BLACK / DARK-GRAY
+				glm::vec4(0.f, 1.f, 0.f, 1.f), // GREEN
+				glm::vec4(1.f, 1.f, 0.f, 1.f), // YELLOW
+				glm::vec4(0.f, 1.f, 1.f, 1.f), // CYAN
+				glm::vec4(1.f, 0.f, 1.f, 1.f), // MAGENTA
+			}
+		}
+	);
+
+	mTempMesh = new Mesh("assets/models/viking_room.obj");
+	mTempMesh->SetMaterial(mTempMaterial);
 }
 
 void App::CreateInstance() {
@@ -1524,7 +1550,7 @@ void App::Cleanup() {
 	vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
 
 	PipelineLayoutManager::Shutdown();
-	delete mTempShader;
+	delete mTempMaterial;
 
 	vkDestroyDevice(mLogicalDevice, nullptr);
 

@@ -2,7 +2,7 @@
 #include "renderer/mesh.h"
 
 #include "app.h"
-#include "renderer/shader.h"
+#include "renderer/material.h"
 #include "utils/buffer_utils.h"
 
 VkVertexInputBindingDescription Vertex::GetBindingDescription() {
@@ -67,15 +67,14 @@ Mesh::~Mesh() {
 	vkFreeMemory(logicalDevice, mVertexBufferMemory, nullptr);
 }
 
-void Mesh::SetShader(Shader* _shader) {
-	// TODO - this is temporary, just to contain main drawing logic in one place
-	assert(_shader);
+void Mesh::SetMaterial(Material* _material) {
+	assert(_material);
 
-	mShader = _shader;
+	mMaterial = _material;
 }
 
 void Mesh::BindMeshResources(const VkCommandBuffer& _commandBuffer) const {
-	mShader->BindShaderResources(_commandBuffer);
+	mMaterial->BindMaterialResources(_commandBuffer);
 
 	// Bind buffers
 	static const VkDeviceSize zeroOffset = 0;

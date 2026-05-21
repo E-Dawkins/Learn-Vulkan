@@ -19,17 +19,8 @@ struct RasterizerState
 	float lineWidth = 1.f;
 };
 
-// TODO: remove from shader header, and somehow make this dynamic
-struct PushConstants
-{
-	uint32_t runtimeId;
-};
-
 class Shader : IFileReader
 {
-public:
-	PushConstants pushConstants;
-
 private:
 	RasterizerState mRasterizerState;
 	BlendModel mBlendModel;
@@ -41,6 +32,8 @@ public:
 	~Shader();
 
 	void BindShaderResources(const VkCommandBuffer& _commandBuffer) const;
+
+	const VkPipelineLayout& GetLayoutForShader() const;
 
 private:
 	VkShaderModule CreateModule(const ShaderStage& _stage, const std::vector<char>& _shaderCode);
