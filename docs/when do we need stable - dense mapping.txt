@@ -1,0 +1,13 @@
+Full transparency, I did use AI to research some stuff and it gave me this to remember.
+
+Will the resource be reference by other assets?
+- Yes => need a STABLE ID
+
+Will the resource live in a gpu array / ssbo that must stay dense (free of holes)?
+- Yes => need a DENSE ID
+
+Can resources of the type be unloaded / reloaded / moved?
+- Yes => need a MAPPING TABLE
+
+Can dense ids become invalid when removing items?
+- Yes => need a FREE-SLOT ALLOCATOR
