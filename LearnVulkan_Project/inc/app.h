@@ -12,6 +12,8 @@
 #include <optional>
 #include <vector>
 
+#include "utils/type_defs.h"
+
 class Material;
 class Mesh;
 class Texture;
@@ -100,11 +102,10 @@ private:
 	VkDescriptorPool mFrameDescriptorPool;
 	std::vector<VkDescriptorSet> mFrameDescriptorSets;
 
-	const uint32_t mMaxTextureCount = UINT16_MAX; // eventually this will be a dynamic count
 	VkDescriptorPool mMaterialDescriptorPool;
 	VkDescriptorSet mMaterialDescriptorSet;
-	std::vector<VkSampler> mTextureSamplers;
-	Ssbo mRuntimeToTexIndexSsbo;
+	std::unordered_map<AssetDefs::TextureSlot, VkSampler> mTextureSlotToSampler;
+	Ssbo mDenseIdToTextureSlot;
 
 	std::vector<VkCommandBuffer> mCommandBuffers;
 	std::vector<VkSemaphore> mImageAvailableSemaphores; // signal that an image has been acquired
@@ -124,8 +125,6 @@ private:
 
 	Material* mTempMaterial;
 	Mesh* mTempMesh;
-	std::vector<Texture*> mTempTextureArray;
-	std::unordered_map<uint64_t, uint32_t> mTempStableToRuntimeIdMap;
 
 public:
 	bool framebufferResized = false;
@@ -140,7 +139,6 @@ public:
 		assert(_index < mRenderPasses.size());
 		return mRenderPasses[_index];
 	}
-	uint32_t GetMaxTextureCount() const { return mMaxTextureCount; }
 
 	// TODO: Remove this, as it is temporary for demo purposes
 	Material* GetMaterial() const { return mTempMaterial; }
@@ -179,7 +177,6 @@ private:
 	VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat _format);
 	void CreateDepthResources();
-	void CreateTextureSampler();
 
 	void CreateUniformBuffers();
 
@@ -189,7 +186,8 @@ private:
 
 	void CreateMaterialBuffers();
 	void CreateMaterialDescriptorSet();
-	void InsertTextureInDescriptorSet(Texture* _tex);
+	void OnTextureLoaded(const Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
+	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
 
 	uint32_t FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const;
 	void CreateCommandBuffers();

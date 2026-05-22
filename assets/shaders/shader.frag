@@ -2,7 +2,7 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout (set = 1, binding = 0) uniform sampler2D textures[];
-layout (set = 1, binding = 1) readonly buffer RuntimeToTexId {
+layout (set = 1, binding = 1) readonly buffer DenseIdToTextureSlot {
 	uint texSlot[];
 };
 

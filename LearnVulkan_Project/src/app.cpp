@@ -9,6 +9,7 @@
 #include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
+#include "utils/asset_manager.h"
 #include "utils/buffer_utils.h"
 #include "utils/image_utils.h"
 #include "utils/vulkan_ext_funcs.h"
@@ -97,12 +98,12 @@ static void FramebufferResizeCallback(GLFWwindow* /*_window*/, int /*_width*/, i
 
 static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _action, int /*_mods*/) {
 	if (_button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS) {
-		uint32_t& texId = App::GetInstance().GetMaterial()->params.runtimeTexIds[0];
+		AssetDefs::DenseId& texId = App::GetInstance().GetMaterial()->params.denseTexIds[0];
 		texId = (texId + 1) % 2;
 	}
 
 	if (_button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS) {
-		uint32_t& intVar = App::GetInstance().GetMaterial()->params.runtimeTexIds[1];
+		AssetDefs::DenseId& intVar = App::GetInstance().GetMaterial()->params.denseTexIds[1];
 		intVar = (intVar + 1) % 6;
 	}
 }
@@ -170,26 +171,17 @@ void App::InitVulkan() {
 	CreateSyncObjects();
 
 	// Create/load all our textures
-	// IT DOES NOT MATTER THE LOAD ORDER ANYMORE, THE STABLE ID => RUNTIME ID WORKS! :)
-	Texture* texStatue = new Texture("assets/textures/texture.jpg");
-	Texture* texVikingRoom = new Texture("assets/textures/viking_room.png");
-	
-	mTempTextureArray = {
-		texVikingRoom,
-		texStatue,
-	};
-	
-	// Update material descriptor set with newly loaded textures
-	for (Texture* tex : mTempTextureArray) {
-		InsertTextureInDescriptorSet(tex);
-	}
+	// IT DOES NOT MATTER THE LOAD ORDER ANYMORE, THE STABLE ID => DENSE ID WORKS! :)
+	AssetManager::Init();
+	AssetManager::GetInstance().onTextureLoaded = std::bind(&App::OnTextureLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+	AssetManager::GetInstance().LoadTexture("assets\\textures\\viking_room.png");
+	AssetManager::GetInstance().LoadTexture("assets\\textures\\texture.jpg");
 
 	// Initialize material with viking texture and default params
-	uint32_t runtimeId = mTempStableToRuntimeIdMap[texVikingRoom->GetStableId()];
 	mTempMaterial = new Material(
 		shader,
 		MaterialParams{
-			.runtimeTexIds = { runtimeId, 0 },
+			.denseTexIds = { AssetManager::GetInstance().GetDenseIdForTexture("textures\\viking_room.png"), 0},
 			.colorVars = {
 				glm::vec4(1.f, 1.f, 1.f, 1.f), // WHITE
 				glm::vec4(.05f, .05f, .05f, 1.f), // BLACK / DARK-GRAY
@@ -915,53 +907,6 @@ void App::CreateDepthResources() {
 	mDepthImageView = Utils::ImageUtils::CreateImageView(mDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
-void App::CreateTextureSampler() {
-	VkSamplerCreateInfo samplerInfo = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_LINEAR, // concerns oversampling
-		.minFilter = VK_FILTER_LINEAR, // concerns undersampling
-
-		// What to do when sampling outside the texture borders
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-
-		// Enable anisotropy, as it is relatively cheap nowadays
-		.anisotropyEnable = VK_TRUE,
-
-		// If a comparision function is enabled, texels are first compared
-		// to some value and the result of the comparison is used for filtering
-		.compareEnable = VK_FALSE,
-		.compareOp = VK_COMPARE_OP_ALWAYS,
-
-		// Border color when sampling outside the texture borders
-		// and address mode is 'clamp to border'
-		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
-
-		// If true, sampler uses [0..texWidth] and [0..texHeight] for
-		// sampling texture coordinates. If false, simply use [0..1]
-		// Note, most applications keep this false so UVs are [0..1]
-		.unnormalizedCoordinates = VK_FALSE,
-	};
-
-	// We define these here because they are not in a sensible order
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.f;
-	samplerInfo.minLod = 0.f;
-	samplerInfo.maxLod = VK_LOD_CLAMP_NONE; // no max lod
-
-	// Query max anisotropy supported by device
-	VkPhysicalDeviceProperties properties = {};
-	vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
-
-	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-
-	mTextureSamplers.push_back({});
-	if (vkCreateSampler(mLogicalDevice, &samplerInfo, nullptr, &mTextureSamplers.back()) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create texture sampler!");
-	}
-}
-
 void App::CreateUniformBuffers() {
 	VkDeviceSize bufferSize = sizeof(CameraData);
 
@@ -1003,7 +948,7 @@ void App::CreateDescriptorPools() {
 
 	// ----- Material descriptor pool -----
 	std::array<VkDescriptorPoolSize, 2> materialPoolSizes = {
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mMaxTextureCount }, // texSampler[]
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, AssetManagerGlobals::gMaxTexCount }, // texSampler[]
 		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }, // runtimeToTexIndex[]
 	};
 
@@ -1074,7 +1019,7 @@ void App::CreateFrameDescriptorSets() {
 }
 
 void App::CreateMaterialBuffers() {
-	mRuntimeToTexIndexSsbo.Init(sizeof(uint32_t) * mMaxTextureCount);
+	mDenseIdToTextureSlot.Init(sizeof(AssetDefs::TextureSlot) * AssetManagerGlobals::gMaxTexCount);
 }
 
 void App::CreateMaterialDescriptorSet() {
@@ -1092,20 +1037,20 @@ void App::CreateMaterialDescriptorSet() {
 	}
 
 	// Initial SSBO mappings
-	mRuntimeToTexIndexSsbo.WriteToDescriptorSet(mMaterialDescriptorSet, 1);
+	mDenseIdToTextureSlot.WriteToDescriptorSet(mMaterialDescriptorSet, 1);
 }
 
-void App::InsertTextureInDescriptorSet(Texture* _tex) {
-	static uint32_t curIndex = 0;
+void App::OnTextureLoaded(const Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot) {
+	mDenseIdToTextureSlot.GetElement<AssetDefs::TextureSlot>(_denseId) = _texSlot;
 
 	// We need a new texture sampler for this texture index
-	if (curIndex >= mTextureSamplers.size()) {
-		CreateTextureSampler();
+	if (!mTextureSlotToSampler.contains(_texSlot)) {
+		CreateTextureSamplerForSlot(_texSlot);
 	}
 
 	VkDescriptorImageInfo imageInfo{
-		.sampler = mTextureSamplers[curIndex],
-		.imageView = _tex->GetImageView(),
+		.sampler = mTextureSlotToSampler[_texSlot],
+		.imageView = _tex.GetImageView(),
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
@@ -1113,7 +1058,7 @@ void App::InsertTextureInDescriptorSet(Texture* _tex) {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		.dstSet = mMaterialDescriptorSet,
 		.dstBinding = 0,
-		.dstArrayElement = curIndex,
+		.dstArrayElement = _texSlot,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.pImageInfo = &imageInfo
@@ -1131,16 +1076,53 @@ void App::InsertTextureInDescriptorSet(Texture* _tex) {
 		0,
 		nullptr
 	);
+}
 
-	// Store a mapping from stable id => runtime id
-	mTempStableToRuntimeIdMap[_tex->GetStableId()] = curIndex;
+void App::CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot) {
+	VkSamplerCreateInfo samplerInfo = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR, // concerns oversampling
+		.minFilter = VK_FILTER_LINEAR, // concerns undersampling
 
-	// Set material ssbo at runtime index => tex index
-	// Note: this may look useless now, but if load order is
-	//       inconsistent, this mapping is required
-	mRuntimeToTexIndexSsbo.GetElement<uint32_t>(curIndex) = curIndex;
+		// What to do when sampling outside the texture borders
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 
-	curIndex++;
+		// Enable anisotropy, as it is relatively cheap nowadays
+		.anisotropyEnable = VK_TRUE,
+
+		// If a comparision function is enabled, texels are first compared
+		// to some value and the result of the comparison is used for filtering
+		.compareEnable = VK_FALSE,
+		.compareOp = VK_COMPARE_OP_ALWAYS,
+
+		// Border color when sampling outside the texture borders
+		// and address mode is 'clamp to border'
+		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
+
+		// If true, sampler uses [0..texWidth] and [0..texHeight] for
+		// sampling texture coordinates. If false, simply use [0..1]
+		// Note, most applications keep this false so UVs are [0..1]
+		.unnormalizedCoordinates = VK_FALSE,
+	};
+
+	// We define these here because they are not in a sensible order
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.f;
+	samplerInfo.minLod = 0.f;
+	samplerInfo.maxLod = VK_LOD_CLAMP_NONE; // no max lod
+
+	// Query max anisotropy supported by device
+	VkPhysicalDeviceProperties properties = {};
+	vkGetPhysicalDeviceProperties(App::GetInstance().GetPhysicalDevice(), &properties);
+
+	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+	mTextureSlotToSampler[_texSlot] = {};
+	if (vkCreateSampler(App::GetInstance().GetLogicalDevice(), &samplerInfo, nullptr, &mTextureSlotToSampler[_texSlot]) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create texture sampler!");
+	}
 }
 
 uint32_t App::FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const {
@@ -1512,15 +1494,13 @@ void App::UpdateUniformBuffer(uint32_t _currentImage) {
 void App::Cleanup() {
 	CleanupSwapChain();
 
-	for (const auto& texSampler : mTextureSamplers) {
+	for (auto& [slot, texSampler] : mTextureSlotToSampler) {
 		vkDestroySampler(mLogicalDevice, texSampler, nullptr);
 	}
 
-	for (Texture* tex : mTempTextureArray) {
-		delete tex;
-	}
+	AssetManager::Shutdown();
 
-	mRuntimeToTexIndexSsbo.Reset();
+	mDenseIdToTextureSlot.Reset();
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
 		vkDestroyBuffer(mLogicalDevice, mUniformBuffers[i], nullptr);

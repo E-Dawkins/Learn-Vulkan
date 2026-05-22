@@ -1,11 +1,11 @@
 #pragma once
-#include <cstdint>
+#include "utils/type_defs.h"
 
 class Shader;
 
 struct MaterialParams
 {
-	uint32_t runtimeTexIds[8];
+	AssetDefs::DenseId denseTexIds[8];
 	glm::vec4 colorVars[6];
 };
 
