@@ -187,6 +187,7 @@ private:
 	void CreateMaterialBuffers();
 	void CreateMaterialDescriptorSet();
 	void OnTextureLoaded(const Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
+	void OnTextureUnloaded(AssetDefs::DenseId _denseId);
 	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
 
 	uint32_t FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const;

@@ -36,6 +36,7 @@ const Texture& AssetManager::LoadTexture(const std::filesystem::path& _path) {
 	// Grab next available texture slot
 	assert(!mFreeTextureSlots.empty());
 	AssetDefs::TextureSlot textureSlot = mFreeTextureSlots.top();
+	mDenseIdToTextureSlot[denseId] = textureSlot;
 	mFreeTextureSlots.pop();
 
 	// Finally, call onTextureLoaded callback
@@ -44,6 +45,47 @@ const Texture& AssetManager::LoadTexture(const std::filesystem::path& _path) {
 	}
 
 	return loadedTex;
+}
+
+void AssetManager::UnloadTexture(const std::string& _texPathStr) {
+	if (!mTextures.contains(_texPathStr)) {
+		return; // no texture found with the passed in path string
+	}
+
+	// DO NOT ALLOW UNLOADING THE DEFAULT TEXTURE, IT IS VITAL
+	if (_texPathStr == "textures\\default_texture.png") {
+		std::cerr << "Someone tried to unload 'default_texture.png' ... naughty!\n";
+		return;
+	}
+
+	Texture* texToUnload = mTextures[_texPathStr];
+	if (!texToUnload) {
+		// Texture is already null, just remove it from the map
+		mTextures.erase(_texPathStr);
+		return;
+	}
+
+	// Retrieve all stored ids
+	uint64_t stableId = texToUnload->GetStableId();
+	AssetDefs::DenseId denseId = mStableIdToDenseId[stableId];
+	AssetDefs::TextureSlot textureSlot = mDenseIdToTextureSlot[denseId];
+
+	// Free texture slot
+	mDenseIdToTextureSlot.erase(denseId);
+	mFreeTextureSlots.push(textureSlot);
+
+	// Free dense id
+	mStableIdToDenseId.erase(stableId);
+	mFreeDenseIds.push(denseId);
+
+	// Remove texture from asset map
+	mTextures.erase(_texPathStr);
+	delete texToUnload;
+
+	// Finally, call onTextureUnloaded callback
+	if (onTextureUnloaded) {
+		onTextureUnloaded(denseId);
+	}
 }
 
 AssetDefs::DenseId AssetManager::GetDenseIdForTexture(const std::string& _texPathStr) const {
