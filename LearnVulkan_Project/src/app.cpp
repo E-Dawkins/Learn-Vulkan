@@ -1089,8 +1089,16 @@ void App::OnTextureLoaded(const Texture& _tex, AssetDefs::DenseId _denseId, Asse
 }
 
 void App::OnTextureUnloaded(AssetDefs::DenseId _denseId) {
-	// Point dense id at 'default_tex', signalling it is 'unloaded'
-	mDenseIdToTextureSlot.GetElement<AssetDefs::TextureSlot>(_denseId) = 0;
+	AssetDefs::TextureSlot& textureSlot = mDenseIdToTextureSlot.GetElement<AssetDefs::TextureSlot>(_denseId);
+	
+	// Destroy the sampler at texture slot
+	vkDestroySampler(mLogicalDevice, mTextureSlotToSampler[textureSlot], nullptr);
+
+	// Remove slot -> sampler mapping
+	mTextureSlotToSampler.erase(textureSlot);
+
+	// Point slot to 'default_tex', in the case that a material is still referencing it
+	textureSlot = 0;
 }
 
 void App::CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot) {
