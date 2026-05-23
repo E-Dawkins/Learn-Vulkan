@@ -96,3 +96,7 @@ AssetDefs::DenseId AssetManager::GetDenseIdForTexture(const std::string& _texPat
 
 	return mStableIdToDenseId.at(tex->GetStableId());
 }
+
+bool AssetManager::IsTextureLoaded(const std::string& _texPathStr) const {
+	return mTextures.contains(_texPathStr);
+}

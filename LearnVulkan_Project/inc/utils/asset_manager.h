@@ -37,4 +37,5 @@ public:
 	void UnloadTexture(const std::string& _texPathStr);
 
 	AssetDefs::DenseId GetDenseIdForTexture(const std::string& _texPathStr) const;
+	bool IsTextureLoaded(const std::string& _texPathStr) const;
 };

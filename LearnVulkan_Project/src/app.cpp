@@ -112,7 +112,16 @@ static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _actio
 	}
 
 	if (_button == GLFW_MOUSE_BUTTON_MIDDLE && _action == GLFW_PRESS) {
-		AssetManager::GetInstance().UnloadTexture("textures\\statue.jpg");
+		AssetManager& managerInst = AssetManager::GetInstance();
+
+		const std::string texPath = "textures\\statue.jpg";
+
+		if (managerInst.IsTextureLoaded(texPath)) {
+			managerInst.UnloadTexture(texPath);
+		}
+		else {
+			managerInst.LoadTexture(std::filesystem::path("assets") / texPath);
+		}
 	}
 }
 
