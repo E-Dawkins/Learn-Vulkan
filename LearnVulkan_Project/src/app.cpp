@@ -967,7 +967,7 @@ void App::CreateDescriptorPools() {
 
 	// ----- Material descriptor pool -----
 	std::array<VkDescriptorPoolSize, 2> materialPoolSizes = {
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, AssetManagerGlobals::gMaxTexCount }, // texSampler[]
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, AssetManagerGlobals::gMaxTextureCount }, // texSampler[]
 		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }, // runtimeToTexIndex[]
 	};
 
@@ -1038,7 +1038,7 @@ void App::CreateFrameDescriptorSets() {
 }
 
 void App::CreateMaterialBuffers() {
-	mDenseIdToTextureSlot.Init(sizeof(AssetDefs::TextureSlot) * AssetManagerGlobals::gMaxTexCount);
+	mDenseIdToTextureSlot.Init(sizeof(AssetDefs::TextureSlot) * AssetManagerGlobals::gMaxTextureCount);
 }
 
 void App::CreateMaterialDescriptorSet() {

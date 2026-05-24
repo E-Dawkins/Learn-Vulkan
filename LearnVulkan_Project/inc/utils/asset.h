@@ -1,16 +1,18 @@
 #pragma once
 #include <filesystem>
 
+#include "utils/type_defs.h"
+
 class IAsset
 {
 private:
-	uint64_t mStableId;
+	AssetDefs::StableId mStableId;
 
 public:
 	IAsset(const std::filesystem::path& _filePath);
 
-	uint64_t GetStableId() const { return mStableId; }
+	AssetDefs::StableId GetStableId() const { return mStableId; }
 
 private:
-	uint64_t StrToStableId(const std::string& _str) const;
+	AssetDefs::StableId StrToStableId(const std::string& _str) const;
 };

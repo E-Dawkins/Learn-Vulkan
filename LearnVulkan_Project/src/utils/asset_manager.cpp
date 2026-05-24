@@ -3,13 +3,6 @@
 
 #include "renderer/texture.h"
 
-AssetManager::AssetManager() {
-	for (uint16_t i = 0; i < AssetManagerGlobals::gMaxTexCount; i++) {
-		mFreeDenseIds.push(AssetManagerGlobals::gMaxTexCount - i - 1);
-		mFreeTextureSlots.push(AssetManagerGlobals::gMaxTexCount - i - 1);
-	}
-}
-
 AssetManager::~AssetManager() {
 	for (auto& [path, tex] : mTextures) {
 		delete tex;
@@ -28,20 +21,12 @@ const Texture& AssetManager::LoadTexture(const std::filesystem::path& _path) {
 	const Texture& loadedTex = *mTextures[relativePath.string()];
 
 	// Store stable -> dense id mapping
-	assert(!mFreeDenseIds.empty());
-	AssetDefs::DenseId denseId = mFreeDenseIds.top();
+	AssetDefs::DenseId denseId = mTextureSlotAllocator.AllocateId();
 	mStableIdToDenseId[loadedTex.GetStableId()] = denseId;
-	mFreeDenseIds.pop();
-
-	// Grab next available texture slot
-	assert(!mFreeTextureSlots.empty());
-	AssetDefs::TextureSlot textureSlot = mFreeTextureSlots.top();
-	mDenseIdToTextureSlot[denseId] = textureSlot;
-	mFreeTextureSlots.pop();
 
 	// Finally, call onTextureLoaded callback
 	if (onTextureLoaded) {
-		onTextureLoaded(loadedTex, denseId, textureSlot);
+		onTextureLoaded(loadedTex, denseId, mTextureSlotAllocator.GetSlotForId(denseId));
 	}
 
 	return loadedTex;
@@ -66,17 +51,12 @@ void AssetManager::UnloadTexture(const std::string& _texPathStr) {
 	}
 
 	// Retrieve all stored ids
-	uint64_t stableId = texToUnload->GetStableId();
+	AssetDefs::StableId stableId = texToUnload->GetStableId();
 	AssetDefs::DenseId denseId = mStableIdToDenseId[stableId];
-	AssetDefs::TextureSlot textureSlot = mDenseIdToTextureSlot[denseId];
 
-	// Free texture slot
-	mDenseIdToTextureSlot.erase(denseId);
-	mFreeTextureSlots.push(textureSlot);
-
-	// Free dense id
+	// Free mappings
+	mTextureSlotAllocator.FreeId(denseId);
 	mStableIdToDenseId.erase(stableId);
-	mFreeDenseIds.push(denseId);
 
 	// Remove texture from asset map
 	mTextures.erase(_texPathStr);
