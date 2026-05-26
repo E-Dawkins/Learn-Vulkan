@@ -1,0 +1,26 @@
+type:shader{
+	type:shaderStage{
+		"assets/shaders/shader.vert.spv",1
+		"assets/shaders/shader.frag.spv",16
+	}
+	blendModel=0
+	shadingModel=0
+	type:rasterizerState{
+		polygonMode=0
+		cullMode=2
+		lineWidth=1.0
+	}
+}
+type:materialParams{
+	type:stableTexIds{
+		15366719586664209429
+	}
+	type:colorVars{
+		1.0,1.0,1.0,1.0
+		0.05,0.05,0.05,1.0
+		0.0,1.0,0.0,1.0
+		1.0,1.0,0.0,1.0
+		0.0,1.0,1.0,1.0
+		1.0,0.0,1.0,1.0
+	}
+}

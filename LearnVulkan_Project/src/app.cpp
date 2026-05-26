@@ -162,15 +162,6 @@ void App::InitVulkan() {
 	CreateSwapChain();
 	CreateImageViews();
 	CreateRenderPass();
-	
-	Shader* shader = new Shader(
-		std::vector<ShaderStage>{
-			ShaderStage{ .filePath = "assets/shaders/shader.vert.spv", .flagBit = VK_SHADER_STAGE_VERTEX_BIT },
-			ShaderStage{ .filePath = "assets/shaders/shader.frag.spv", .flagBit = VK_SHADER_STAGE_FRAGMENT_BIT }
-		},
-		BlendModel::Opaque,
-		ShadingModel::Unlit
-	);
 
 	CreateCommandPool();
 	CreateColorResources();
@@ -196,23 +187,9 @@ void App::InitVulkan() {
 	AssetManager::GetInstance().LoadTexture("assets\\textures\\viking_room.png");
 	AssetManager::GetInstance().LoadTexture("assets\\textures\\statue.jpg");
 
-	// Initialize material with viking texture and default params
-	mTempMaterial = new Material(
-		shader,
-		MaterialParams{
-			.denseTexIds = { AssetManager::GetInstance().GetDenseIdForTexture("textures\\viking_room.png"), 0},
-			.colorVars = {
-				glm::vec4(1.f, 1.f, 1.f, 1.f), // WHITE
-				glm::vec4(.05f, .05f, .05f, 1.f), // BLACK / DARK-GRAY
-				glm::vec4(0.f, 1.f, 0.f, 1.f), // GREEN
-				glm::vec4(1.f, 1.f, 0.f, 1.f), // YELLOW
-				glm::vec4(0.f, 1.f, 1.f, 1.f), // CYAN
-				glm::vec4(1.f, 0.f, 1.f, 1.f), // MAGENTA
-			}
-		}
-	);
+	mTempMaterial = new Material("assets\\materials\\test.material");
 
-	mTempMesh = new Mesh("assets/models/viking_room.obj");
+	mTempMesh = new Mesh("assets\\models\\viking_room.obj");
 	mTempMesh->SetMaterial(mTempMaterial);
 }
 

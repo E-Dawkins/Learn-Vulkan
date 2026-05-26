@@ -9,7 +9,6 @@ struct ShaderStage
 {
 	std::filesystem::path filePath;
 	VkShaderStageFlagBits flagBit;
-	std::string entryPoint = "main";
 };
 
 struct RasterizerState

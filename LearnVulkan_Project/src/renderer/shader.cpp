@@ -22,7 +22,7 @@ Shader::Shader(const std::vector<ShaderStage>& _stages, BlendModel _blendModel, 
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = stage.flagBit,
 			.module = activeModules.back(),
-			.pName = stage.entryPoint.c_str(),
+			.pName = "main", // we are enforcing 'main' as entry point for all shaders
 		});
 	}
 

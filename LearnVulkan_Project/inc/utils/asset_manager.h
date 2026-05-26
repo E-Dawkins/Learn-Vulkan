@@ -7,10 +7,12 @@
 
 #include "utils/type_defs.h"
 
+class Material;
 class Texture;
 
 namespace AssetManagerGlobals {
 	constexpr size_t gMaxTextureCount = 100;
+	constexpr size_t gMaxMaterialCount = 100;
 }
 
 template<typename SlotType, size_t Count>
@@ -66,6 +68,10 @@ public:
 	}
 };
 
+#define DECLARE_ASSET_HELPERS(TYPE, ASSET_MAP) \
+	AssetDefs::DenseId GetDenseIdFor ## TYPE ## (const std::string& _pathStr) const; \
+	bool Is ## TYPE ## Loaded(const std::string& _pathStr) const;
+
 class AssetManager : public ISingleton<AssetManager>
 {
 public:
@@ -80,13 +86,26 @@ private:
 	std::unordered_map<std::string, Texture*> mTextures;
 	DenseToSlotAllocator<AssetDefs::TextureSlot, AssetManagerGlobals::gMaxTextureCount> mTextureSlotAllocator;
 
+	// Material mappings
+	std::unordered_map<std::string, Material*> mMaterials;
+	DenseToSlotAllocator<AssetDefs::MaterialSlot, AssetManagerGlobals::gMaxMaterialCount> mMaterialSlotAllocator;
+
 public:
 	AssetManager() = default;
 	~AssetManager();
 
-	const Texture& LoadTexture(const std::filesystem::path& _path);
-	void UnloadTexture(const std::string& _texPathStr);
+private:
+	std::string StripFirstFolder(const std::filesystem::path& _path);
 
-	AssetDefs::DenseId GetDenseIdForTexture(const std::string& _texPathStr) const;
-	bool IsTextureLoaded(const std::string& _texPathStr) const;
+public:
+	AssetDefs::DenseId GetDenseIdForStableId(AssetDefs::StableId _stableId) const;
+
+	const Texture& LoadTexture(const std::filesystem::path& _path);
+	void UnloadTexture(const std::string& _pathStr);
+
+	const Material& LoadMaterial(const std::filesystem::path& _path);
+	void UnloadMaterial(const std::string& _pathStr);
+
+	DECLARE_ASSET_HELPERS(Texture, mTextures)
+	DECLARE_ASSET_HELPERS(Material, mMaterials)
 };
