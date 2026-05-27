@@ -98,7 +98,7 @@ static void FramebufferResizeCallback(GLFWwindow* /*_window*/, int /*_width*/, i
 
 static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _action, int /*_mods*/) {
 	if (_button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS) {
-		AssetDefs::DenseId& texId = App::GetInstance().GetMaterial()->params.denseTexIds[0];
+		AssetDefs::DenseId& texId = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params.denseTexIds[0];
 		texId = (texId + 1) % 3;
 
 		if (texId == 0) { // now that we have a default texture, skip it
@@ -107,7 +107,7 @@ static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _actio
 	}
 
 	if (_button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS) {
-		AssetDefs::DenseId& intVar = App::GetInstance().GetMaterial()->params.denseTexIds[1];
+		AssetDefs::DenseId& intVar = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params.denseTexIds[1];
 		intVar = (intVar + 1) % 6;
 	}
 
@@ -116,11 +116,11 @@ static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _actio
 
 		const std::string texPath = "textures\\statue.jpg";
 
-		if (managerInst.IsTextureLoaded(texPath)) {
-			managerInst.UnloadTexture(texPath);
+		if (managerInst.IsAssetLoaded<Texture>(texPath)) {
+			managerInst.UnloadAsset<Texture>(texPath);
 		}
 		else {
-			managerInst.LoadTexture(std::filesystem::path("assets") / texPath);
+			managerInst.LoadAsset<Texture>(std::filesystem::path("assets") / texPath);
 		}
 	}
 }
@@ -183,14 +183,15 @@ void App::InitVulkan() {
 	AssetManager::Init();
 	AssetManager::GetInstance().onTextureLoaded = std::bind(&App::OnTextureLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 	AssetManager::GetInstance().onTextureUnloaded = std::bind(&App::OnTextureUnloaded, this, std::placeholders::_1);
-	AssetManager::GetInstance().LoadTexture("assets\\textures\\default_texture.png");
-	AssetManager::GetInstance().LoadTexture("assets\\textures\\viking_room.png");
-	AssetManager::GetInstance().LoadTexture("assets\\textures\\statue.jpg");
 
-	mTempMaterial = new Material("assets\\materials\\test.material");
+	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\default_texture.png");
+	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\viking_room.png");
+	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\statue.jpg");
+
+	Material* testMat = &AssetManager::GetInstance().LoadAsset<Material>("assets\\materials\\test.material");
 
 	mTempMesh = new Mesh("assets\\models\\viking_room.obj");
-	mTempMesh->SetMaterial(mTempMaterial);
+	mTempMesh->SetMaterial(testMat);
 }
 
 void App::CreateInstance() {
@@ -1539,7 +1540,6 @@ void App::Cleanup() {
 	vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
 
 	PipelineLayoutManager::Shutdown();
-	delete mTempMaterial;
 
 	vkDestroyDevice(mLogicalDevice, nullptr);
 

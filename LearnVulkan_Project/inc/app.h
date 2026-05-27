@@ -123,7 +123,6 @@ private:
 	VkDeviceMemory mColorImageMemory;
 	VkImageView mColorImageView;
 
-	Material* mTempMaterial;
 	Mesh* mTempMesh;
 
 public:
@@ -132,16 +131,13 @@ public:
 public:
 	void Run();
 
-	const VkPhysicalDevice& GetPhysicalDevice() const { return mPhysicalDevice; }
-	const VkDevice& GetLogicalDevice() const { return mLogicalDevice; }
-	const MultisampleState& GetMsaaState() const { return mMsaaState; }
-	const VkRenderPass& GetRenderPass(size_t _index) const {
+	inline const VkPhysicalDevice& GetPhysicalDevice() const { return mPhysicalDevice; }
+	inline const VkDevice& GetLogicalDevice() const { return mLogicalDevice; }
+	inline const MultisampleState& GetMsaaState() const { return mMsaaState; }
+	inline const VkRenderPass& GetRenderPass(size_t _index) const {
 		assert(_index < mRenderPasses.size());
 		return mRenderPasses[_index];
 	}
-
-	// TODO: Remove this, as it is temporary for demo purposes
-	Material* GetMaterial() const { return mTempMaterial; }
 
 	VkCommandBuffer BeginSingleTimeCommands() const;
 	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;

@@ -1,11 +1,8 @@
 #pragma once
 #include "utils/singleton.h"
-
-#include <filesystem>
-#include <functional>
-#include <stack>
-
 #include "utils/type_defs.h"
+
+#include <stack>
 
 class Material;
 class Texture;
@@ -68,22 +65,33 @@ public:
 	}
 };
 
-#define DECLARE_ASSET_HELPERS(TYPE, ASSET_MAP) \
-	AssetDefs::DenseId GetDenseIdFor ## TYPE ## (const std::string& _pathStr) const; \
-	bool Is ## TYPE ## Loaded(const std::string& _pathStr) const;
+template<typename AssetType, typename SlotType>
+using LoadCallback = std::function<void(const AssetType&, AssetDefs::DenseId, SlotType)>;
+using UnloadCallback = std::function<void(AssetDefs::DenseId)>;
+
+template<typename AssetType>
+using AssetMap = std::unordered_map<std::string, AssetType*>;
+
+template<typename T>
+concept ValidAssetType =
+	std::is_same_v<T, Texture> ||
+	std::is_same_v<T, Material>;
 
 class AssetManager : public ISingleton<AssetManager>
 {
 public:
-	std::function<void(const Texture&, AssetDefs::DenseId, AssetDefs::TextureSlot)> onTextureLoaded;
-	std::function<void(AssetDefs::TextureSlot)> onTextureUnloaded;
+	LoadCallback<Texture, AssetDefs::TextureSlot> onTextureLoaded;
+	UnloadCallback onTextureUnloaded;
+
+	LoadCallback<Material, AssetDefs::MaterialSlot> onMaterialLoaded;
+	UnloadCallback onMaterialUnloaded;
 
 private:
 	// Shared mapping, as stable ids are unique to asset paths
 	std::unordered_map<AssetDefs::StableId, AssetDefs::DenseId> mStableIdToDenseId;
 
 	// Texture mappings
-	std::unordered_map<std::string, Texture*> mTextures;
+	AssetMap<Texture> mTextures;
 	DenseToSlotAllocator<AssetDefs::TextureSlot, AssetManagerGlobals::gMaxTextureCount> mTextureSlotAllocator;
 
 	// Material mappings
@@ -97,15 +105,119 @@ public:
 private:
 	std::string StripFirstFolder(const std::filesystem::path& _path);
 
+	template<typename AssetType, typename SlotType, size_t AssetCount>
+	AssetType& TryLoadAsset(const std::filesystem::path& _path, AssetMap<AssetType>& _assetMap, DenseToSlotAllocator<SlotType, AssetCount>& _slotAllocator, LoadCallback<AssetType, SlotType> _callback = {}) {
+		const std::string assetName = StripFirstFolder(_path);
+
+		// Store in asset map
+		_assetMap[assetName] = new AssetType(_path);
+		AssetType& loadedAsset = *_assetMap[assetName];
+
+		// Store stable -> dense id mapping
+		AssetDefs::DenseId denseId = _slotAllocator.AllocateId();
+		mStableIdToDenseId[loadedAsset.GetStableId()] = denseId;
+
+		// Optional callback
+		if (_callback) {
+			_callback(loadedAsset, denseId, _slotAllocator.GetSlotForId(denseId));
+		}
+
+		return loadedAsset;
+	}
+
+	template<typename AssetType, typename SlotType, size_t AssetCount>
+	void TryUnloadAsset(const std::string& _pathStr, AssetMap<AssetType>& _assetMap, DenseToSlotAllocator<SlotType, AssetCount>& _slotAllocator, const std::string& _defaultAssetStr = "", UnloadCallback _callback = {}) {
+		// No asset found with passed in string
+		if (!_assetMap.contains(_pathStr)) {
+			return;
+		}
+
+		// Do not allow unloading the default asset
+		if (!_defaultAssetStr.empty() && _pathStr == _defaultAssetStr) {
+			std::cerr << "Someone tried to unload '" << _defaultAssetStr << "' ... naughty!\n";
+			return;
+		}
+
+		AssetType* assetToUnload = _assetMap[_pathStr];
+		if (!assetToUnload) {
+			// Asset already null, just remove it from map
+			_assetMap.erase(_pathStr);
+			return;
+		}
+
+		// Retrieve all stored ids
+		AssetDefs::StableId stableId = assetToUnload->GetStableId();
+		AssetDefs::DenseId denseId = mStableIdToDenseId[stableId];
+
+		// Free mappings
+		_slotAllocator.FreeId(denseId);
+		mStableIdToDenseId.erase(stableId);
+
+		// Remove asset from asset map
+		_assetMap.erase(_pathStr);
+		delete assetToUnload;
+
+		// Optional callback
+		if (_callback) {
+			_callback(denseId);
+		}
+	}
+
+	template<typename AssetType>
+	AssetType& TryGetAsset(const std::string& _pathStr, const AssetMap<AssetType>& _assetMap) const {
+		assert(_assetMap.contains(_pathStr));
+
+		AssetType* asset = _assetMap.at(_pathStr);
+		assert(asset);
+
+		return *asset;
+	}
+
 public:
 	AssetDefs::DenseId GetDenseIdForStableId(AssetDefs::StableId _stableId) const;
 
-	const Texture& LoadTexture(const std::filesystem::path& _path);
-	void UnloadTexture(const std::string& _pathStr);
+	template<ValidAssetType AssetType>
+	AssetType& LoadAsset(const std::filesystem::path& _path) {
+		if constexpr (std::is_same_v<AssetType, Texture>) {
+			return TryLoadAsset(_path, mTextures, mTextureSlotAllocator, onTextureLoaded);
+		}
+		else if constexpr (std::is_same_v<AssetType, Material>) {
+			return TryLoadAsset(_path, mMaterials, mMaterialSlotAllocator, onMaterialLoaded);
+		}
+	}
 
-	const Material& LoadMaterial(const std::filesystem::path& _path);
-	void UnloadMaterial(const std::string& _pathStr);
+	template<ValidAssetType AssetType>
+	void UnloadAsset(const std::string& _pathStr) {
+		if constexpr (std::is_same_v<AssetType, Texture>) {
+			return TryUnloadAsset(_pathStr, mTextures, mTextureSlotAllocator, "textures\\default_texture.png", onTextureUnloaded);
+		}
+		else if constexpr (std::is_same_v<AssetType, Material>) {
+			return TryUnloadAsset(_pathStr, mMaterials, mMaterialSlotAllocator, "", onMaterialUnloaded);
+		}
+	}
 
-	DECLARE_ASSET_HELPERS(Texture, mTextures)
-	DECLARE_ASSET_HELPERS(Material, mMaterials)
+	template <ValidAssetType AssetType>
+	bool IsAssetLoaded(const std::string& _pathStr) const {
+		if constexpr (std::is_same_v<AssetType, Texture>) {
+			return mTextures.contains(_pathStr);
+		}
+		else if constexpr (std::is_same_v<AssetType, Material>) {
+			return mMaterials.contains(_pathStr);
+		}
+	}
+
+	template<ValidAssetType AssetType>
+	AssetType& GetAsset(const std::string& _pathStr) const {
+		if constexpr (std::is_same_v<AssetType, Texture>) {
+			return TryGetAsset(_pathStr, mTextures);
+		}
+		else if constexpr (std::is_same_v<AssetType, Material>) {
+			return TryGetAsset(_pathStr, mMaterials);
+		}
+	}
+
+	template<ValidAssetType AssetType>
+	AssetDefs::DenseId GetDenseIdForAsset(const std::string& _pathStr) const {
+		return GetDenseIdForStableId(GetAsset<AssetType>(_pathStr).GetStableId());
+	}
 };
