@@ -98,7 +98,8 @@ static void FramebufferResizeCallback(GLFWwindow* /*_window*/, int /*_width*/, i
 
 static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _action, int /*_mods*/) {
 	if (_button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS) {
-		AssetDefs::DenseId& texId = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params.denseTexIds[0];
+		// Grab params* from material asset, and directly access its elements
+		AssetDefs::DenseId& texId = AssetManager::GetInstance().GetAssetFromPath<Material>("materials\\test.material").params->denseTexIds[0];
 		texId = (texId + 1) % 3;
 
 		if (texId == 0) { // now that we have a default texture, skip it
@@ -107,7 +108,8 @@ static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _actio
 	}
 
 	if (_button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS) {
-		AssetDefs::DenseId& intVar = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params.denseTexIds[1];
+		// Grab params* from material asset, and directly access its elements
+		int32_t& intVar = AssetManager::GetInstance().GetAssetFromPath<Material>("materials\\test.material").params->intVars[0];
 		intVar = (intVar + 1) % 6;
 	}
 
@@ -183,6 +185,8 @@ void App::InitVulkan() {
 	AssetManager::Init();
 	AssetManager::GetInstance().onTextureLoaded = std::bind(&App::OnTextureLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 	AssetManager::GetInstance().onTextureUnloaded = std::bind(&App::OnTextureUnloaded, this, std::placeholders::_1);
+	AssetManager::GetInstance().onMaterialLoaded = std::bind(&App::OnMaterialLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+	AssetManager::GetInstance().onMaterialUnloaded = std::bind(&App::OnMaterialUnloaded, this, std::placeholders::_1);
 
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\default_texture.png");
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\viking_room.png");
@@ -946,7 +950,7 @@ void App::CreateDescriptorPools() {
 	// ----- Material descriptor pool -----
 	std::array<VkDescriptorPoolSize, 2> materialPoolSizes = {
 		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, AssetManagerGlobals::gMaxTextureCount }, // texSampler[]
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }, // runtimeToTexIndex[]
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 }, // denseIdToTexSlot[], materialParams[], denseIdToMatSlot[]
 	};
 
 	poolInfo = {
@@ -1017,6 +1021,8 @@ void App::CreateFrameDescriptorSets() {
 
 void App::CreateMaterialBuffers() {
 	mDenseIdToTextureSlot.Init(sizeof(AssetDefs::TextureSlot) * AssetManagerGlobals::gMaxTextureCount);
+	mMaterialParamsBuffer.Init(sizeof(MaterialParams) * AssetManagerGlobals::gMaxMaterialCount);
+	mDenseIdToMaterialSlot.Init(sizeof(AssetDefs::MaterialSlot) * AssetManagerGlobals::gMaxMaterialCount);
 }
 
 void App::CreateMaterialDescriptorSet() {
@@ -1035,9 +1041,11 @@ void App::CreateMaterialDescriptorSet() {
 
 	// Initial SSBO mappings
 	mDenseIdToTextureSlot.WriteToDescriptorSet(mMaterialDescriptorSet, 1);
+	mMaterialParamsBuffer.WriteToDescriptorSet(mMaterialDescriptorSet, 2);
+	mDenseIdToMaterialSlot.WriteToDescriptorSet(mMaterialDescriptorSet, 3);
 }
 
-void App::OnTextureLoaded(const Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot) {
+void App::OnTextureLoaded(Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot) {
 	mDenseIdToTextureSlot.GetElement<AssetDefs::TextureSlot>(_denseId) = _texSlot;
 
 	// We need a new texture sampler for this texture index
@@ -1133,6 +1141,23 @@ void App::CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot) {
 	if (vkCreateSampler(App::GetInstance().GetLogicalDevice(), &samplerInfo, nullptr, &mTextureSlotToSampler[_texSlot]) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create texture sampler!");
 	}
+}
+
+void App::OnMaterialLoaded(Material& _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot) {
+	MaterialParams& paramsToFill = mMaterialParamsBuffer.GetElement<MaterialParams>(_denseId);
+	mDenseIdToMaterialSlot.GetElement<AssetDefs::MaterialSlot>(_denseId) = _matSlot;
+
+	// Copy material params into ssbo
+	paramsToFill = *_mat.params;
+
+	// Set material to point to ssbo memory
+	_mat.params = &paramsToFill;
+}
+
+void App::OnMaterialUnloaded(AssetDefs::DenseId _denseId) {
+	// Reset ssbo's to defaults, in the case they are still being referenced
+	mMaterialParamsBuffer.GetElement<MaterialParams>(_denseId) = {};
+	mDenseIdToMaterialSlot.GetElement<AssetDefs::MaterialSlot>(_denseId) = 0;
 }
 
 uint32_t App::FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const {
@@ -1511,6 +1536,8 @@ void App::Cleanup() {
 	AssetManager::Shutdown();
 
 	mDenseIdToTextureSlot.Reset();
+	mMaterialParamsBuffer.Reset();
+	mDenseIdToMaterialSlot.Reset();
 
 	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
 		vkDestroyBuffer(mLogicalDevice, mUniformBuffers[i], nullptr);

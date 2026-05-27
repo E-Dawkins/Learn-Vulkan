@@ -2,6 +2,7 @@
 #include "renderer/material.h"
 
 #include "renderer/shader.h"
+#include "renderer/texture.h"
 #include "utils/asset_manager.h"
 
 Material::Material(const std::filesystem::path& _filepath) : IAsset(_filepath) {
@@ -16,19 +17,24 @@ Material::Material(const std::filesystem::path& _filepath) : IAsset(_filepath) {
 
 Material::~Material() {
 	delete mShader;
+
+	// We do not need to free params* as it points to GPU memory
+	// and will be freed at some point by the renderer
+	// delete params;
+	// We do need to nullify it though, incase something tries to use it still
+	params = nullptr;
 }
 
 void Material::BindMaterialResources(const VkCommandBuffer& _commandBuffer) {
 	mShader->BindShaderResources(_commandBuffer);
 
-	// Bind material params as push constants ... for now
 	vkCmdPushConstants(
 		_commandBuffer,
 		mShader->GetLayoutForShader(),
 		VK_SHADER_STAGE_ALL_GRAPHICS,
 		0,
-		sizeof(MaterialParams),
-		&params
+		sizeof(AssetDefs::DenseId),
+		&GetDenseId()
 	);
 }
 
@@ -59,18 +65,24 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) {
 }
 
 void Material::FillParamsFromAil(const AilReader& _reader) {
-	AilNode* stableIdArray = _reader.GetNode("materialParams|stableTexIds");
-	assert(stableIdArray);
-
-	for (size_t i = 0; i < stableIdArray->subnodes.size(); i++) {
-		AssetDefs::StableId stableId = _reader.GetAsIntCasted<AssetDefs::StableId>("materialParams|stableTexIds|" + std::to_string(i));
-		params.denseTexIds[i] = AssetManager::GetInstance().GetDenseIdForStableId(stableId);
+	if (!params) {
+		params = new MaterialParams();
 	}
 
-	// TODO: remove this!
-	params.denseTexIds[1] = 0;
+	for (size_t i = 0; i < 8; i++) {
+		AssetDefs::StableId stableId = _reader.GetAsIntCasted<AssetDefs::StableId>("materialParams|stableTexIds|" + std::to_string(i));
 
-	for (size_t i = 0; i < 6; i++) {
-		params.colorVars[i] = _reader.GetAsVec4("materialParams|colorVars|" + std::to_string(i));
+		const AssetManager& manager = AssetManager::GetInstance();
+		if (manager.IsAssetLoaded(stableId)) {
+			params->denseTexIds[i] = manager.GetAssetFromStableId<Texture>(stableId).GetDenseId();
+		}
+	}
+
+	for (size_t i = 0; i < 8; i++) {
+		params->colorVars[i] = _reader.GetAsVec4("materialParams|colorVars|" + std::to_string(i));
+	}
+
+	for (size_t i = 0; i < 8; i++) {
+		params->intVars[i] = _reader.GetAsIntCasted<int32_t>("materialParams|intVars|" + std::to_string(i));
 	}
 }

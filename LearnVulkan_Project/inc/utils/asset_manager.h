@@ -2,6 +2,8 @@
 #include "utils/singleton.h"
 #include "utils/type_defs.h"
 
+#include "utils/asset.h"
+
 #include <stack>
 
 class Material;
@@ -66,7 +68,7 @@ public:
 };
 
 template<typename AssetType, typename SlotType>
-using LoadCallback = std::function<void(const AssetType&, AssetDefs::DenseId, SlotType)>;
+using LoadCallback = std::function<void(AssetType&, AssetDefs::DenseId, SlotType)>;
 using UnloadCallback = std::function<void(AssetDefs::DenseId)>;
 
 template<typename AssetType>
@@ -88,7 +90,7 @@ public:
 
 private:
 	// Shared mapping, as stable ids are unique to asset paths
-	std::unordered_map<AssetDefs::StableId, AssetDefs::DenseId> mStableIdToDenseId;
+	std::unordered_map<AssetDefs::StableId, IAsset*> mStableIdToAsset;
 
 	// Texture mappings
 	AssetMap<Texture> mTextures;
@@ -111,18 +113,21 @@ private:
 
 		// Store in asset map
 		_assetMap[assetName] = new AssetType(_path);
-		AssetType& loadedAsset = *_assetMap[assetName];
+		AssetType* loadedAsset = _assetMap[assetName];
+
+		// Allocate a dense id
+		AssetDefs::DenseId denseId = _slotAllocator.AllocateId();
+		loadedAsset->mDenseId = denseId;
 
 		// Store stable -> dense id mapping
-		AssetDefs::DenseId denseId = _slotAllocator.AllocateId();
-		mStableIdToDenseId[loadedAsset.GetStableId()] = denseId;
+		mStableIdToAsset[loadedAsset->GetStableId()] = loadedAsset;
 
 		// Optional callback
 		if (_callback) {
-			_callback(loadedAsset, denseId, _slotAllocator.GetSlotForId(denseId));
+			_callback(*loadedAsset, denseId, _slotAllocator.GetSlotForId(denseId));
 		}
 
-		return loadedAsset;
+		return *loadedAsset;
 	}
 
 	template<typename AssetType, typename SlotType, size_t AssetCount>
@@ -146,12 +151,12 @@ private:
 		}
 
 		// Retrieve all stored ids
-		AssetDefs::StableId stableId = assetToUnload->GetStableId();
-		AssetDefs::DenseId denseId = mStableIdToDenseId[stableId];
+		AssetDefs::StableId stableId = assetToUnload->mStableId;
+		AssetDefs::DenseId denseId = assetToUnload->mDenseId;
 
 		// Free mappings
 		_slotAllocator.FreeId(denseId);
-		mStableIdToDenseId.erase(stableId);
+		mStableIdToAsset.erase(stableId);
 
 		// Remove asset from asset map
 		_assetMap.erase(_pathStr);
@@ -174,7 +179,21 @@ private:
 	}
 
 public:
-	AssetDefs::DenseId GetDenseIdForStableId(AssetDefs::StableId _stableId) const;
+	template<ValidAssetType AssetType>
+	AssetType& GetAssetFromStableId(AssetDefs::StableId _stableId) const {
+		assert(mStableIdToAsset.contains(_stableId));
+		return *dynamic_cast<AssetType*>(mStableIdToAsset.at(_stableId));
+	}
+
+	template<ValidAssetType AssetType>
+	AssetType& GetAssetFromPath(const std::string& _pathStr) const {
+		if constexpr (std::is_same_v<AssetType, Texture>) {
+			return TryGetAsset(_pathStr, mTextures);
+		}
+		else if constexpr (std::is_same_v<AssetType, Material>) {
+			return TryGetAsset(_pathStr, mMaterials);
+		}
+	}
 
 	template<ValidAssetType AssetType>
 	AssetType& LoadAsset(const std::filesystem::path& _path) {
@@ -196,7 +215,7 @@ public:
 		}
 	}
 
-	template <ValidAssetType AssetType>
+	template<ValidAssetType AssetType>
 	bool IsAssetLoaded(const std::string& _pathStr) const {
 		if constexpr (std::is_same_v<AssetType, Texture>) {
 			return mTextures.contains(_pathStr);
@@ -206,18 +225,5 @@ public:
 		}
 	}
 
-	template<ValidAssetType AssetType>
-	AssetType& GetAsset(const std::string& _pathStr) const {
-		if constexpr (std::is_same_v<AssetType, Texture>) {
-			return TryGetAsset(_pathStr, mTextures);
-		}
-		else if constexpr (std::is_same_v<AssetType, Material>) {
-			return TryGetAsset(_pathStr, mMaterials);
-		}
-	}
-
-	template<ValidAssetType AssetType>
-	AssetDefs::DenseId GetDenseIdForAsset(const std::string& _pathStr) const {
-		return GetDenseIdForStableId(GetAsset<AssetType>(_pathStr).GetStableId());
-	}
+	bool IsAssetLoaded(AssetDefs::StableId _stableId) const;
 };

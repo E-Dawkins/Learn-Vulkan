@@ -80,11 +80,21 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 				AssetManagerGlobals::gMaxTextureCount, 
 				VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT, // binding flags
 			},
-			// runtimeToTexIndex[]
+			// denseIdToTexSlot[]
 			{ 
 				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 
 				VK_SHADER_STAGE_FRAGMENT_BIT 
 			},
+			// materialParams[]
+			{
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				VK_SHADER_STAGE_FRAGMENT_BIT
+			},
+			// denseIdToMatSlot[]
+			{
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				VK_SHADER_STAGE_FRAGMENT_BIT
+			}
 		},
 		.layoutCreateFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT
 	});

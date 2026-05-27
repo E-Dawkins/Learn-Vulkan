@@ -23,4 +23,7 @@ type:materialParams{
 		0.0,1.0,1.0,1.0
 		1.0,0.0,1.0,1.0
 	}
+	type:intVars{
+		2
+	}
 }

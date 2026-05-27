@@ -106,6 +106,8 @@ private:
 	VkDescriptorSet mMaterialDescriptorSet;
 	std::unordered_map<AssetDefs::TextureSlot, VkSampler> mTextureSlotToSampler;
 	Ssbo mDenseIdToTextureSlot;
+	Ssbo mMaterialParamsBuffer;
+	Ssbo mDenseIdToMaterialSlot;
 
 	std::vector<VkCommandBuffer> mCommandBuffers;
 	std::vector<VkSemaphore> mImageAvailableSemaphores; // signal that an image has been acquired
@@ -182,9 +184,11 @@ private:
 
 	void CreateMaterialBuffers();
 	void CreateMaterialDescriptorSet();
-	void OnTextureLoaded(const Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
+	void OnTextureLoaded(Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
 	void OnTextureUnloaded(AssetDefs::DenseId _denseId);
 	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
+	void OnMaterialLoaded(Material& _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot);
+	void OnMaterialUnloaded(AssetDefs::DenseId _denseId);
 
 	uint32_t FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const;
 	void CreateCommandBuffers();

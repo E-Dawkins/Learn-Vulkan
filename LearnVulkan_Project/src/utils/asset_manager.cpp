@@ -23,7 +23,6 @@ std::string AssetManager::StripFirstFolder(const std::filesystem::path& _path) {
 	return relativePath.string();
 }
 
-AssetDefs::DenseId AssetManager::GetDenseIdForStableId(AssetDefs::StableId _stableId) const {
-	assert(mStableIdToDenseId.contains(_stableId));
-	return mStableIdToDenseId.at(_stableId);
+bool AssetManager::IsAssetLoaded(AssetDefs::StableId _stableId) const {
+	return mStableIdToAsset.contains(_stableId);
 }

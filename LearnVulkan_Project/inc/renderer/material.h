@@ -8,7 +8,8 @@ class Shader;
 struct MaterialParams
 {
 	AssetDefs::DenseId denseTexIds[8];
-	glm::vec4 colorVars[6];
+	glm::vec4 colorVars[8];
+	int32_t intVars[8];
 };
 
 class Material : IFileReader, public IAsset
@@ -17,7 +18,7 @@ private:
 	Shader* mShader;
 
 public:
-	MaterialParams params;
+	MaterialParams* params = nullptr;
 
 public:
 	Material(const std::filesystem::path& _filepath);
