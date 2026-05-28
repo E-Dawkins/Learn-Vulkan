@@ -37,6 +37,63 @@ void IFileReader::ReadFileAsAil(const std::filesystem::path& _filepath, AilReade
 	_outReader.Parse(file);
 }
 
+AilNode::AilNode(const std::string& _name, const std::string& _value) 
+	: mName(_name), mValue(_value) {}
+
+AilNode::~AilNode() {
+	for (AilNode* n : mSubnodes) {
+		delete n;
+	}
+}
+
+void AilNode::AddSubnode(AilNode* _node) {
+	if (_node) {
+		mSubnodes.push_back(_node);
+	}
+}
+
+AilNode* AilNode::GetSubnode(size_t _index) const {
+	if (_index < mSubnodes.size()) {
+		return mSubnodes[_index];
+	}
+	
+	return nullptr;
+}
+
+AilNode* AilNode::GetSubnode(const std::string& _name) const {
+	for (AilNode* sn : mSubnodes) {
+		if (sn->mName == _name) {
+			return sn;
+		}
+	}
+
+	return nullptr;
+}
+
+glm::vec4 AilNode::ValAsVec4() const {
+	glm::vec4 out = {};
+
+	for (glm::length_t i = 0; i < std::min(mSubnodes.size(), 4ull); i++) {
+		out[i] = std::stof(mSubnodes[i]->mValue);
+	}
+
+	return out;
+}
+
+std::string AilNode::GetAsStr(bool _trimQuotations) const {
+	size_t start = 0, count = mValue.size();
+
+	if (_trimQuotations) {
+		if (mValue.front() == '"') {
+			start++;
+			count--;
+		}
+		if (mValue.back() == '"') count--;
+	}
+
+	return mValue.substr(start, count);
+}
+
 AilReader::~AilReader() {
 	Reset();
 }
@@ -51,8 +108,7 @@ void AilReader::Reset() {
 }
 
 void AilReader::Parse(std::ifstream& _file) {
-	mRootNode = new AilNode();
-	mRootNode->name = "root";
+	mRootNode = new AilNode("root");
 	mNodeStack.push(mRootNode);
 
 	for (std::string line; std::getline(_file, line);) {
@@ -73,10 +129,9 @@ void AilReader::Parse(std::ifstream& _file) {
 			size_t bracePos = line.find("{");
 			line = line.substr(5, bracePos - 5);
 
-			AilNode* typeNode = new AilNode();
-			typeNode->name = line;
+			AilNode* typeNode = new AilNode(line);
 
-			mNodeStack.top()->subnodes.push_back(typeNode);
+			mNodeStack.top()->AddSubnode(typeNode);
 			mNodeStack.push(typeNode);
 		}
 		else {
@@ -84,41 +139,38 @@ void AilReader::Parse(std::ifstream& _file) {
 
 			// Split by ','
 			if (initialPos != std::string::npos) {
-				AilNode* elemNode = new AilNode();
+				AilNode* elemNode = new AilNode("");
 
-				mNodeStack.top()->subnodes.push_back(elemNode);
+				mNodeStack.top()->AddSubnode(elemNode);
 
 				for (size_t pos = initialPos; pos != std::string::npos; pos = line.find(',')) {
-					AilNode* dataNode = new AilNode();
-					dataNode->value = line.substr(0, pos);
+					AilNode* dataNode = new AilNode("", line.substr(0, pos));
 
-					elemNode->subnodes.push_back(dataNode);
+					elemNode->AddSubnode(dataNode);
 
 					line.erase(0, pos + 1); // +1 for delimiter
 				}
 
 				// Final element
 				if (!line.empty()) {
-					AilNode* dataNode = new AilNode();
-					dataNode->value = line;
+					AilNode* dataNode = new AilNode("", line);
 
-					elemNode->subnodes.push_back(dataNode);
+					elemNode->AddSubnode(dataNode);
 				}
 			}
 			else {
 				initialPos = line.find('=');
 
-				AilNode* dataNode = new AilNode();
+				AilNode* dataNode = nullptr;
 
 				if (initialPos != std::string::npos) {
-					dataNode->name = line.substr(0, initialPos);
-					dataNode->value = line.substr(initialPos + 1);
+					dataNode = new AilNode(line.substr(0, initialPos), line.substr(initialPos + 1));
 				}
 				else {
-					dataNode->value = line;
+					dataNode = new AilNode("", line);
 				}
 
-				mNodeStack.top()->subnodes.push_back(dataNode);
+				mNodeStack.top()->AddSubnode(dataNode);
 			}
 		}
 	}
@@ -134,14 +186,15 @@ void AilReader::PrintNode(AilNode* _node, size_t _indent) {
 			std::cout << '\t';
 		}
 
-		if (_node->name.empty()) _node->name = "''";
-		if (_node->value.empty()) _node->value = "''";
+		std::string name = _node->GetRawName(), value = _node->GetRawValue();
+		if (name.empty()) name = "''";
+		if (value.empty()) value = "''";
 
-		std::cout << "" << _node->name << "\t";
-		std::cout << "" << _node->value << "\n";
+		std::cout << "" << name << "\t";
+		std::cout << "" << value << "\n";
 	}
 
-	for (AilNode* sn : _node->subnodes) {
+	for (AilNode* sn : *_node) {
 		PrintNode(sn, _indent + 1);
 	}
 }
@@ -153,8 +206,8 @@ AilNode* AilReader::GetNode(std::string _nodePath) const {
 		if (std::all_of(_nameToFind.begin(), _nameToFind.end(), ::isdigit)) {
 			size_t index = std::stoull(_nameToFind);
 
-			if (index < current->subnodes.size()) {
-				current = current->subnodes[index];
+			if (index < current->size()) {
+				current = *current->begin();
 				return true;
 			}
 		}
@@ -163,8 +216,8 @@ AilNode* AilReader::GetNode(std::string _nodePath) const {
 	};
 
 	auto find_by_name = [&](const std::string& _nameToFind) {
-		for (AilNode* sn : current->subnodes) {
-			if (sn->name == _nameToFind) {
+		for (AilNode* sn : *current) {
+			if (sn->GetRawName() == _nameToFind) {
 				current = sn;
 				return true;
 			}
@@ -192,63 +245,6 @@ AilNode* AilReader::GetNode(std::string _nodePath) const {
 	}
 
 	return current;
-}
-
-std::string AilReader::GetAsStr(const std::string& _nodePath, bool _trimQuotations) const {
-	AilNode* node = GetNode(_nodePath);
-
-	if (node) {
-		if (_trimQuotations) {
-			if (node->value.front() == '"') node->value.erase(0, 1);
-			if (node->value.back() == '"') node->value.erase(node->value.size() - 1);
-		}
-
-		return node->value;
-	}
-	
-	return "";
-}
-
-size_t AilReader::GetAsInt(const std::string& _nodePath) const {
-	std::string nodeVal = GetAsStr(_nodePath);
-
-	if (!nodeVal.empty()) {
-		return std::stoull(nodeVal);
-	}
-
-	return 0ull;
-}
-
-float AilReader::GetAsFloat(const std::string& _nodePath) const {
-	std::string nodeVal = GetAsStr(_nodePath);
-
-	if (!nodeVal.empty()) {
-		return std::stof(nodeVal);
-	}
-
-	return 0.f;
-}
-
-glm::vec4 AilReader::GetAsVec4(const std::string& _nodePath) const {
-	AilNode* node = GetNode(_nodePath);
-
-	if (node) {
-		glm::vec4 out = {};
-		for (glm::length_t i = 0; i < std::min(node->subnodes.size(), 4ull); i++) {
-			out[i] = std::stof(node->subnodes[i]->value);
-		}
-		return out;
-	}
-
-	return glm::vec4();
-}
-
-glm::vec3 AilReader::GetAsVec3(const std::string& _nodePath) const {
-	return glm::vec3(GetAsVec4(_nodePath));
-}
-
-glm::vec2 AilReader::GetAsVec2(const std::string& _nodePath) const {
-	return glm::vec2(GetAsVec4(_nodePath));
 }
 
 // Following trim functions taken from here:

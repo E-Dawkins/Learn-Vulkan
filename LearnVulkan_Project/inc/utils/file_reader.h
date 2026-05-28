@@ -14,17 +14,64 @@ protected:
 	void ReadFileAsAil(const std::filesystem::path& _filepath, AilReader& _outReader);
 };
 
+template <typename T>
+concept ValidNodeValue = 
+	   std::is_same_v<T, size_t>
+	|| std::is_same_v<T, float>
+	|| std::is_same_v<T, glm::vec4>
+	|| std::is_same_v<T, glm::vec3>
+	|| std::is_same_v<T, glm::vec2>;
+
 struct AilNode
 {
-	std::string name;
-	std::string value;
+private:
+	std::string mName;
+	std::string mValue;
 
-	std::vector<AilNode*> subnodes;
+	std::vector<AilNode*> mSubnodes;
 
-	~AilNode() {
-		for (AilNode* n : subnodes) {
-			delete n;
+public:
+	AilNode(const std::string& _name, const std::string& _value = "");
+	~AilNode();
+
+	inline const std::string& GetRawName() const { return mName; }
+	inline const std::string& GetRawValue() const { return mValue; }
+
+	void AddSubnode(AilNode* _node);
+	auto begin() { return mSubnodes.begin(); }
+	auto end() { return mSubnodes.end(); }
+	constexpr size_t size() const { return mSubnodes.size(); }
+	AilNode* GetSubnode(size_t _index) const;
+	AilNode* GetSubnode(const std::string& _name) const;
+
+private:
+	glm::vec4 ValAsVec4() const;
+
+public:
+	std::string GetAsStr(bool _trimQuotations = true) const;
+
+	template<ValidNodeValue T>
+	T Get() const {
+		if constexpr (std::is_same_v<T, size_t>) {
+			return std::stoull(mValue);
 		}
+		else if constexpr (std::is_same_v<T, float>) {
+			return std::stof(mValue);
+		}
+		else if constexpr (std::is_same_v<T, glm::vec4>) {
+			return ValAsVec4();
+		}
+		else if constexpr (std::is_same_v<T, glm::vec3>) {
+			return glm::vec3(ValAsVec4());
+		}
+		else if constexpr (std::is_same_v<T, glm::vec2>) {
+			return glm::vec2(ValAsVec4());
+		}
+	}
+
+	template<typename T>
+	T GetAsSizetCasted() const {
+		return static_cast<T>(Get<size_t>());
 	}
 };
 
@@ -42,17 +89,6 @@ public:
 	void PrintNode(AilNode* _node, size_t _indent = 0);
 
 	AilNode* GetNode(std::string _nodePath) const;
-	std::string GetAsStr(const std::string& _nodePath, bool _trimQuotations = true) const;
-	size_t GetAsInt(const std::string& _nodePath) const;
-	float GetAsFloat(const std::string& _nodePath) const;
-	glm::vec4 GetAsVec4(const std::string& _nodePath) const;
-	glm::vec3 GetAsVec3(const std::string& _nodePath) const;
-	glm::vec2 GetAsVec2(const std::string& _nodePath) const;
-
-	template<typename T>
-	T GetAsIntCasted(const std::string& _nodePath) const {
-		return static_cast<T>(GetAsInt(_nodePath));
-	}
 
 private:
 	void LTrim(std::string& _str);
