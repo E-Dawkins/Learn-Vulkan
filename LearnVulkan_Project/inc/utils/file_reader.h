@@ -28,21 +28,17 @@ private:
 	std::string mName;
 	std::string mValue;
 
-	std::vector<AilNode*> mSubnodes;
+public:
+	std::vector<AilNode> subnodes;
 
 public:
-	AilNode(const std::string& _name, const std::string& _value = "");
-	~AilNode();
+	AilNode(const std::string& _name = "", const std::string& _value = "");
 
 	inline const std::string& GetRawName() const { return mName; }
 	inline const std::string& GetRawValue() const { return mValue; }
 
-	void AddSubnode(AilNode* _node);
-	auto begin() { return mSubnodes.begin(); }
-	auto end() { return mSubnodes.end(); }
-	constexpr size_t size() const { return mSubnodes.size(); }
-	AilNode* GetSubnode(size_t _index) const;
-	AilNode* GetSubnode(const std::string& _name) const;
+	bool TryGetSubnode(size_t _index, AilNode& _outNode) const;
+	bool TryGetSubnode(const std::string& _name, AilNode& _outNode) const;
 
 private:
 	glm::vec4 ValAsVec4() const;
@@ -78,7 +74,7 @@ public:
 class AilReader
 {
 private:
-	AilNode* mRootNode = nullptr;
+	AilNode mRootNode;
 	std::stack<AilNode*> mNodeStack;
 
 public:
@@ -86,9 +82,9 @@ public:
 
 	void Reset();
 	void Parse(std::ifstream& _file);
-	void PrintNode(AilNode* _node, size_t _indent = 0);
+	void PrintNode(const AilNode& _node, size_t _indent = 0);
 
-	AilNode* GetNode(std::string _nodePath) const;
+	bool TryGetNode(std::string _nodePath, AilNode& _outNode) const;
 
 private:
 	void LTrim(std::string& _str);
