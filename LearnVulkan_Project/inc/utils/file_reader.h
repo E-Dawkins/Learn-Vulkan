@@ -22,6 +22,20 @@ concept ValidNodeValue =
 	|| std::is_same_v<T, glm::vec3>
 	|| std::is_same_v<T, glm::vec2>;
 
+template <typename T>
+struct OptionalNode
+{
+private:
+	std::optional<std::reference_wrapper<T>> mOptRef = std::nullopt;
+
+public:
+	OptionalNode(const T& _objRef) : mOptRef(_objRef) {}
+	OptionalNode(std::nullopt_t) : mOptRef(std::nullopt) {}
+
+	const T* operator ->() const { return &mOptRef.value().get(); }
+	explicit operator bool() const noexcept { return mOptRef.has_value(); }
+};
+
 struct AilNode
 {
 private:
@@ -37,8 +51,8 @@ public:
 	inline const std::string& GetRawName() const { return mName; }
 	inline const std::string& GetRawValue() const { return mValue; }
 
-	bool TryGetSubnode(size_t _index, AilNode& _outNode) const;
-	bool TryGetSubnode(const std::string& _name, AilNode& _outNode) const;
+	OptionalNode<const AilNode> TryGetSubnode(size_t _index) const;
+	OptionalNode<const AilNode> TryGetSubnode(const std::string& _name) const;
 
 private:
 	glm::vec4 ValAsVec4() const;
@@ -84,7 +98,7 @@ public:
 	void Parse(std::ifstream& _file);
 	void PrintNode(const AilNode& _node, size_t _indent = 0);
 
-	bool TryGetNode(std::string _nodePath, AilNode& _outNode) const;
+	OptionalNode<const AilNode> TryGetNode(std::string _nodePath) const;
 
 private:
 	void LTrim(std::string& _str);

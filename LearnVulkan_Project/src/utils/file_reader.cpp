@@ -40,24 +40,22 @@ void IFileReader::ReadFileAsAil(const std::filesystem::path& _filepath, AilReade
 AilNode::AilNode(const std::string& _name, const std::string& _value) 
 	: mName(_name), mValue(_value) {}
 
-bool AilNode::TryGetSubnode(size_t _index, AilNode& _outNode) const {
+OptionalNode<const AilNode> AilNode::TryGetSubnode(size_t _index) const {
 	if (_index < subnodes.size()) {
-		_outNode = subnodes[_index];
-		return true;
+		return subnodes[_index];
 	}
 
-	return false;
+	return std::nullopt;
 }
 
-bool AilNode::TryGetSubnode(const std::string& _name, AilNode& _outNode) const {
+OptionalNode<const AilNode> AilNode::TryGetSubnode(const std::string& _name) const {
 	for (const AilNode& sn : subnodes) {
 		if (sn.mName == _name) {
-			_outNode = sn;
-			return true;
+			return sn;
 		}
 	}
 
-	return false;
+	return std::nullopt;
 }
 
 glm::vec4 AilNode::ValAsVec4() const {
@@ -175,7 +173,7 @@ void AilReader::PrintNode(const AilNode& _node, size_t _indent) {
 	}
 }
 
-bool AilReader::TryGetNode(std::string _nodePath, AilNode& _outNode) const {
+OptionalNode<const AilNode> AilReader::TryGetNode(std::string _nodePath) const {
 	const AilNode* current = &mRootNode;
 
 	auto find_by_index = [&](const std::string& _nameToFind) {
@@ -207,17 +205,16 @@ bool AilReader::TryGetNode(std::string _nodePath, AilNode& _outNode) const {
 		_nodePath.erase(0, pipePos + 1);
 
 		if (!find_by_index(_nodePath) && !find_by_name(_nodePath)) {
-			return false;
+			return std::nullopt;
 		}
 	}
 
 	// Final path element
 	if (!find_by_index(_nodePath) && !find_by_name(_nodePath)) {
-		return false;
+		return std::nullopt;
 	}
-
-	_outNode = *current;
-	return true;
+	
+	return *current;
 }
 
 // Following trim functions taken from here:

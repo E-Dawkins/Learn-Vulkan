@@ -55,24 +55,24 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
 		std::cerr << "WARNING: No " << _s << " found on disk for " << DebugStr() << "\n";
 	};
 
-	AilNode shaderNode;
-	if (!_reader.TryGetNode("shader", shaderNode)) {
+	auto shaderNode = _reader.TryGetNode("shader");
+	if (!shaderNode) {
 		warn_user("shader params");
 		return nullptr;
 	}
 
 	std::vector<ShaderStage> shaderStages;
-	if (AilNode shaderStagesArray; shaderNode.TryGetSubnode("shaderStages", shaderStagesArray)) {
-		for (const AilNode& stageNode : shaderStagesArray.subnodes) {
-			AilNode pathNode, flagNode;
+	if (auto shaderStagesArray = shaderNode->TryGetSubnode("shaderStages")) {
+		for (const AilNode& stageNode : shaderStagesArray->subnodes) {
+			shaderStages.emplace_back(ShaderStage());
 
-			if (!stageNode.TryGetSubnode(0, pathNode)) continue;
-			if (!stageNode.TryGetSubnode(1, flagNode)) continue;
+			if (auto pathNode = stageNode.TryGetSubnode(0)) {
+				shaderStages.back().filePath = pathNode->GetAsStr();
+			}
 
-			shaderStages.emplace_back(ShaderStage{
-				.filePath = pathNode.GetAsStr(),
-				.flagBit = flagNode.GetAsSizetCasted<VkShaderStageFlagBits>()
-			});
+			if (auto flagNode = stageNode.TryGetSubnode(1)) {
+				shaderStages.back().flagBit = flagNode->GetAsSizetCasted<VkShaderStageFlagBits>();
+			}
 		}
 	}
 	else {
@@ -81,19 +81,17 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
 	}
 
 	RasterizerState rasterizerState;
-	if (AilNode rasterizerStateNode; shaderNode.TryGetSubnode("rasterizerState", rasterizerStateNode)) {
-		AilNode polygonNode, cullNode, lineNode;
-
-		if (rasterizerStateNode.TryGetSubnode("polygonMode", polygonNode)) {
-			rasterizerState.polygonMode = polygonNode.GetAsSizetCasted<VkPolygonMode>();
+	if (auto rasterizerStateNode = shaderNode->TryGetSubnode("rasterizerState")) {
+		if (auto polygonNode = rasterizerStateNode->TryGetSubnode("polygonMode")) {
+			rasterizerState.polygonMode = polygonNode->GetAsSizetCasted<VkPolygonMode>();
 		}
 
-		if (rasterizerStateNode.TryGetSubnode("cullMode", cullNode)) {
-			rasterizerState.cullMode = cullNode.GetAsSizetCasted<VkCullModeFlags>();
+		if (auto cullNode = rasterizerStateNode->TryGetSubnode("cullMode")) {
+			rasterizerState.cullMode = cullNode->GetAsSizetCasted<VkCullModeFlags>();
 		}
 
-		if (rasterizerStateNode.TryGetSubnode("lineWidth", lineNode)) {
-			rasterizerState.lineWidth = lineNode.Get<float>();
+		if (auto lineNode = rasterizerStateNode->TryGetSubnode("lineWidth")) {
+			rasterizerState.lineWidth = lineNode->Get<float>();
 		}
 	}
 	else {
@@ -101,18 +99,22 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
 		return nullptr;
 	}
 
-	AilNode blendNode, shadingNode;
-	shaderNode.TryGetSubnode("blendModel", blendNode);
-	shaderNode.TryGetSubnode("shadingModel", shadingNode);
+	BlendModel blendModel = BlendModel::Opaque;
+	ShadingModel shadingModel = ShadingModel::Unlit;
 
-	Shader* out = new Shader(
+	if (auto blendNode = shaderNode->TryGetSubnode("blendModel")) {
+		blendModel = blendNode->GetAsSizetCasted<BlendModel>();
+	}
+	if (auto shadingNode = shaderNode->TryGetSubnode("shadingModel")) {
+		shadingModel = shadingNode->GetAsSizetCasted<ShadingModel>();
+	}
+
+	return new Shader(
 		shaderStages,
-		blendNode.GetAsSizetCasted<BlendModel>(),
-		shadingNode.GetAsSizetCasted<ShadingModel>(),
+		blendModel,
+		shadingModel,
 		rasterizerState
 	);
-
-	return out;
 }
 
 void Material::FillParamsFromAil(const AilReader& _reader) {
@@ -124,18 +126,18 @@ void Material::FillParamsFromAil(const AilReader& _reader) {
 		params = new MaterialParams();
 	}
 
-	AilNode paramsNode;
-	if (!_reader.TryGetNode("materialParams", paramsNode)) {
+	auto paramsNode = _reader.TryGetNode("materialParams");
+	if (!paramsNode) {
 		warn_user("materialParams");
 		return;
 	}
 
-	if (AilNode stableTexIdsNode; paramsNode.TryGetSubnode("stableTexIds", stableTexIdsNode)) {
+	if (auto stableTexIdsNode = paramsNode->TryGetSubnode("stableTexIds")) {
 		for (size_t i = 0; i < 8; i++) {
-			AilNode idNode;
-			if (!stableTexIdsNode.TryGetSubnode(i, idNode)) continue;
+			auto idNode = stableTexIdsNode->TryGetSubnode(i);
+			if (!idNode) continue;
 
-			AssetDefs::StableId stableId = idNode.GetAsSizetCasted<AssetDefs::StableId>();
+			AssetDefs::StableId stableId = idNode->GetAsSizetCasted<AssetDefs::StableId>();
 
 			const AssetManager& manager = AssetManager::GetInstance();
 			if (manager.IsAssetLoaded(stableId)) {
@@ -147,24 +149,24 @@ void Material::FillParamsFromAil(const AilReader& _reader) {
 		warn_user("stableTexIds");
 	}
 
-	if (AilNode colorVarsNode; paramsNode.TryGetSubnode("colorVars", colorVarsNode)) {
+	if (auto colorVarsNode = paramsNode->TryGetSubnode("colorVars")) {
 		for (size_t i = 0; i < 8; i++) {
-			AilNode colorNode;
-			if (!colorVarsNode.TryGetSubnode(i, colorNode)) continue;
+			auto colorNode = colorVarsNode->TryGetSubnode(i);
+			if (!colorNode) continue;
 
-			params->colorVars[i] = colorNode.Get<glm::vec4>();
+			params->colorVars[i] = colorNode->Get<glm::vec4>();
 		}
 	}
 	else {
 		warn_user("colorVars");
 	}
 
-	if (AilNode intVarsNode; paramsNode.TryGetSubnode("intVars", intVarsNode)) {
+	if (auto intVarsNode = paramsNode->TryGetSubnode("intVars")) {
 		for (size_t i = 0; i < 8; i++) {
-			AilNode intNode;
-			if (!intVarsNode.TryGetSubnode(i, intNode)) continue;
+			auto intNode = intVarsNode->TryGetSubnode(i);
+			if (!intNode) continue;
 
-			params->intVars[i] = intNode.GetAsSizetCasted<int32_t>();
+			params->intVars[i] = intNode->GetAsSizetCasted<int32_t>();
 		}
 	}
 	else {
