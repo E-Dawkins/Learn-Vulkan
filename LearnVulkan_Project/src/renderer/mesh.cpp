@@ -50,9 +50,17 @@ bool Vertex::operator == (const Vertex& _other) const {
 }
 
 Mesh::Mesh(const std::filesystem::path& _filePath) {
-	EnforceFileExtension(_filePath, ".obj");
+	EnforceFileExtension(_filePath, ".mesh");
 
-	LoadFromFile(_filePath);
+	AilReader reader;
+	ReadFileAsAil(_filePath, reader);
+
+	auto pathNode = reader.TryGetNode("path");
+	if (!pathNode) {
+		throw std::runtime_error("Could not find AilNode: 'path' for Mesh [" + _filePath.string() + "]\n");
+	}
+
+	LoadFromFile(pathNode->GetAsStr());
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 }
@@ -89,6 +97,8 @@ void Mesh::DrawMesh(const VkCommandBuffer& _commandBuffer) const {
 }
 
 void Mesh::LoadFromFile(const std::filesystem::path& _filePath) {
+	EnforceFileExtension(_filePath, ".obj");
+
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;

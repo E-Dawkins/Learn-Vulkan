@@ -89,7 +89,6 @@ class AilReader
 {
 private:
 	AilNode mRootNode;
-	std::stack<AilNode*> mNodeStack;
 
 public:
 	~AilReader();

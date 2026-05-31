@@ -88,15 +88,13 @@ AilReader::~AilReader() {
 
 void AilReader::Reset() {
 	mRootNode = AilNode();
-
-	while (!mNodeStack.empty()) {
-		mNodeStack.pop();
-	}
 }
 
 void AilReader::Parse(std::ifstream& _file) {
 	mRootNode = AilNode("root");
-	mNodeStack.push(&mRootNode);
+
+	std::stack<AilNode*> nodeStack;
+	nodeStack.push(&mRootNode);
 
 	for (std::string line; std::getline(_file, line);) {
 		Trim(line);
@@ -108,7 +106,7 @@ void AilReader::Parse(std::ifstream& _file) {
 
 		// End of 'type'
 		if (line == "}") {
-			mNodeStack.pop();
+			nodeStack.pop();
 			continue;
 		}
 
@@ -116,18 +114,18 @@ void AilReader::Parse(std::ifstream& _file) {
 			size_t bracePos = line.find("{");
 			line = line.substr(5, bracePos - 5);
 
-			mNodeStack.top()->subnodes.emplace_back(AilNode(line));
-			AilNode& typeNode = mNodeStack.top()->subnodes.back();
+			nodeStack.top()->subnodes.emplace_back(AilNode(line));
+			AilNode& typeNode = nodeStack.top()->subnodes.back();
 
-			mNodeStack.push(&typeNode);
+			nodeStack.push(&typeNode);
 		}
 		else {
 			size_t initialPos = line.find(',');
 
 			// Split by ','
 			if (initialPos != std::string::npos) {
-				mNodeStack.top()->subnodes.emplace_back(AilNode());
-				AilNode& elemNode = mNodeStack.top()->subnodes.back();
+				nodeStack.top()->subnodes.emplace_back(AilNode());
+				AilNode& elemNode = nodeStack.top()->subnodes.back();
 
 				for (size_t pos = initialPos; pos != std::string::npos; pos = line.find(',')) {
 					elemNode.subnodes.emplace_back(AilNode("", line.substr(0, pos)));
@@ -144,10 +142,10 @@ void AilReader::Parse(std::ifstream& _file) {
 				initialPos = line.find('=');
 
 				if (initialPos != std::string::npos) {
-					mNodeStack.top()->subnodes.emplace_back(AilNode(line.substr(0, initialPos), line.substr(initialPos + 1)));
+					nodeStack.top()->subnodes.emplace_back(AilNode(line.substr(0, initialPos), line.substr(initialPos + 1)));
 				}
 				else {
-					mNodeStack.top()->subnodes.emplace_back(AilNode("", line));
+					nodeStack.top()->subnodes.emplace_back(AilNode("", line));
 				}
 			}
 		}
@@ -204,7 +202,7 @@ OptionalNode<const AilNode> AilReader::TryGetNode(std::string _nodePath) const {
 		std::string nameToFind = _nodePath.substr(0, pipePos);
 		_nodePath.erase(0, pipePos + 1);
 
-		if (!find_by_index(_nodePath) && !find_by_name(_nodePath)) {
+		if (!find_by_index(nameToFind) && !find_by_name(nameToFind)) {
 			return std::nullopt;
 		}
 	}

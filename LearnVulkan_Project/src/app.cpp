@@ -194,7 +194,7 @@ void App::InitVulkan() {
 
 	Material* testMat = &AssetManager::GetInstance().LoadAsset<Material>("assets\\materials\\test.material");
 
-	mTempMesh = new Mesh("assets\\models\\viking_room.obj");
+	mTempMesh = new Mesh("assets\\models\\viking_room.mesh");
 	mTempMesh->SetMaterial(testMat);
 }
 
