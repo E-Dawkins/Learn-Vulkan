@@ -77,7 +77,7 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 			{
 				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
 				VK_SHADER_STAGE_FRAGMENT_BIT, 
-				AssetManagerGlobals::gMaxTextureCount, 
+				AssetManagerGlobals::AssetTraits<Texture>::config.maxCount,
 				VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT, // binding flags
 			},
 			// denseIdToTexSlot[]

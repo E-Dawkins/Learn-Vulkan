@@ -99,7 +99,7 @@ static void FramebufferResizeCallback(GLFWwindow* /*_window*/, int /*_width*/, i
 static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _action, int /*_mods*/) {
 	if (_button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS) {
 		// Grab params* from material asset, and directly access its elements
-		AssetDefs::DenseId& texId = AssetManager::GetInstance().GetAssetFromPath<Material>("materials\\test.material").params->denseTexIds[0];
+		AssetDefs::DenseId& texId = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params->denseTexIds[0];
 		texId = (texId + 1) % 3;
 
 		if (texId == 0) { // now that we have a default texture, skip it
@@ -109,7 +109,7 @@ static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _actio
 
 	if (_button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS) {
 		// Grab params* from material asset, and directly access its elements
-		int32_t& intVar = AssetManager::GetInstance().GetAssetFromPath<Material>("materials\\test.material").params->intVars[0];
+		int32_t& intVar = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params->intVars[0];
 		intVar = (intVar + 1) % 6;
 	}
 
@@ -183,10 +183,10 @@ void App::InitVulkan() {
 	// Create/load all our textures
 	// IT DOES NOT MATTER THE LOAD ORDER ANYMORE, THE STABLE ID => DENSE ID WORKS! :)
 	AssetManager::Init();
-	AssetManager::GetInstance().onTextureLoaded = std::bind(&App::OnTextureLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-	AssetManager::GetInstance().onTextureUnloaded = std::bind(&App::OnTextureUnloaded, this, std::placeholders::_1);
-	AssetManager::GetInstance().onMaterialLoaded = std::bind(&App::OnMaterialLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-	AssetManager::GetInstance().onMaterialUnloaded = std::bind(&App::OnMaterialUnloaded, this, std::placeholders::_1);
+	AssetManager::GetInstance().GetLoadCallback<Texture>() = std::bind(&App::OnTextureLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+	AssetManager::GetInstance().GetUnloadCallback<Texture>() = std::bind(&App::OnTextureUnloaded, this, std::placeholders::_1);
+	AssetManager::GetInstance().GetLoadCallback<Material>() = std::bind(&App::OnMaterialLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+	AssetManager::GetInstance().GetUnloadCallback<Material>() = std::bind(&App::OnMaterialUnloaded, this, std::placeholders::_1);
 
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\default_texture.png");
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\viking_room.png");
@@ -949,7 +949,7 @@ void App::CreateDescriptorPools() {
 
 	// ----- Material descriptor pool -----
 	std::array<VkDescriptorPoolSize, 2> materialPoolSizes = {
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, AssetManagerGlobals::gMaxTextureCount }, // texSampler[]
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, AssetManagerGlobals::AssetTraits<Texture>::config.maxCount }, // texSampler[]
 		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 }, // denseIdToTexSlot[], materialParams[], denseIdToMatSlot[]
 	};
 
@@ -1020,9 +1020,9 @@ void App::CreateFrameDescriptorSets() {
 }
 
 void App::CreateMaterialBuffers() {
-	mDenseIdToTextureSlot.Init(sizeof(AssetDefs::TextureSlot) * AssetManagerGlobals::gMaxTextureCount);
-	mMaterialParamsBuffer.Init(sizeof(MaterialParams) * AssetManagerGlobals::gMaxMaterialCount);
-	mDenseIdToMaterialSlot.Init(sizeof(AssetDefs::MaterialSlot) * AssetManagerGlobals::gMaxMaterialCount);
+	mDenseIdToTextureSlot.Init(sizeof(AssetDefs::TextureSlot) * AssetManagerGlobals::AssetTraits<Texture>::config.maxCount);
+	mMaterialParamsBuffer.Init(sizeof(MaterialParams) * AssetManagerGlobals::AssetTraits<Material>::config.maxCount);
+	mDenseIdToMaterialSlot.Init(sizeof(AssetDefs::MaterialSlot) * AssetManagerGlobals::AssetTraits<Material>::config.maxCount);
 }
 
 void App::CreateMaterialDescriptorSet() {

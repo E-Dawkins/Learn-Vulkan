@@ -1,18 +1,57 @@
 #pragma once
 #include "utils/singleton.h"
-#include "utils/type_defs.h"
 
 #include "utils/asset.h"
+#include "utils/type_defs.h"
 
 #include <stack>
 
 class Material;
 class Texture;
 
+template<typename T>
+concept ValidAssetType =
+	std::is_same_v<T, Texture> ||
+	std::is_same_v<T, Material>;
+
 namespace AssetManagerGlobals {
-	constexpr size_t gMaxTextureCount = 100;
-	constexpr size_t gMaxMaterialCount = 100;
+	struct AssetTraitConfig
+	{
+		uint32_t maxCount = 0;
+		const char* defaultAsset = "";
+	};
+
+	template<ValidAssetType T>
+	struct AssetTraits
+	{
+		// Default traits has no slot type
+		static constexpr AssetTraitConfig config;
+	};
+
+	template<>
+	struct AssetTraits<Texture>
+	{
+		using SlotType = AssetDefs::TextureSlot;
+		static constexpr AssetTraitConfig config = {
+			.maxCount = 100,
+			.defaultAsset = "textures\\default_texture.png"
+		};
+	};
+
+	template<>
+	struct AssetTraits<Material>
+	{
+		using SlotType = AssetDefs::MaterialSlot;
+		static constexpr AssetTraitConfig config = {
+			.maxCount = 100
+		};
+	};
 }
+
+template<typename T>
+concept HasSlotType = requires {
+	typename AssetManagerGlobals::AssetTraits<T>::SlotType;
+};
 
 template<typename SlotType, size_t Count>
 struct DenseToSlotAllocator
@@ -67,163 +106,162 @@ public:
 	}
 };
 
-template<typename AssetType, typename SlotType>
-using LoadCallback = std::function<void(AssetType&, AssetDefs::DenseId, SlotType)>;
-using UnloadCallback = std::function<void(AssetDefs::DenseId)>;
-
-template<typename AssetType>
-using AssetMap = std::unordered_map<std::string, AssetType*>;
-
-template<typename T>
-concept ValidAssetType =
-	std::is_same_v<T, Texture> ||
-	std::is_same_v<T, Material>;
-
 class AssetManager : public ISingleton<AssetManager>
 {
-public:
-	LoadCallback<Texture, AssetDefs::TextureSlot> onTextureLoaded;
-	UnloadCallback onTextureUnloaded;
-
-	LoadCallback<Material, AssetDefs::MaterialSlot> onMaterialLoaded;
-	UnloadCallback onMaterialUnloaded;
-
 private:
 	// Shared mapping, as stable ids are unique to asset paths
 	std::unordered_map<AssetDefs::StableId, IAsset*> mStableIdToAsset;
 
-	// Texture mappings
-	AssetMap<Texture> mTextures;
-	DenseToSlotAllocator<AssetDefs::TextureSlot, AssetManagerGlobals::gMaxTextureCount> mTextureSlotAllocator;
+private:
+	template<ValidAssetType T>
+	struct MapFor
+	{
+		static inline std::unordered_map<std::string, T*> value;
+	};
 
-	// Material mappings
-	std::unordered_map<std::string, Material*> mMaterials;
-	DenseToSlotAllocator<AssetDefs::MaterialSlot, AssetManagerGlobals::gMaxMaterialCount> mMaterialSlotAllocator;
+	template<HasSlotType T>
+	struct AllocatorFor
+	{
+		using TraitsType = AssetManagerGlobals::AssetTraits<T>;
+
+		static inline DenseToSlotAllocator<typename TraitsType::SlotType, TraitsType::config.maxCount> value;
+	};
+
+	template<typename T>
+	struct CallbacksFor;
+
+	template<HasSlotType T>
+	struct CallbacksFor<T>
+	{
+		using TraitsType = AssetManagerGlobals::AssetTraits<T>;
+
+		static inline std::function<void(T&, AssetDefs::DenseId, typename TraitsType::SlotType)> loadCallback;
+		static inline std::function<void(AssetDefs::DenseId)> unloadCallback;
+	};
+
+	template<typename T>
+		requires (ValidAssetType<T> && !HasSlotType<T>)
+	struct CallbacksFor<T>
+	{
+		static inline std::function<void(T&)> loadCallback;
+	};
 
 public:
-	AssetManager() = default;
 	~AssetManager();
 
 private:
-	std::string StripFirstFolder(const std::filesystem::path& _path);
+	std::string StripFirstFolder(const std::filesystem::path& _filepath);
 
-	template<typename AssetType, typename SlotType, size_t AssetCount>
-	AssetType& TryLoadAsset(const std::filesystem::path& _path, AssetMap<AssetType>& _assetMap, DenseToSlotAllocator<SlotType, AssetCount>& _slotAllocator, LoadCallback<AssetType, SlotType> _callback = {}) {
-		const std::string assetName = StripFirstFolder(_path);
+public:
+	bool IsAssetLoaded(AssetDefs::StableId _stableId) const;
 
+	template<ValidAssetType T>
+	bool IsAssetLoaded(const std::string& _pathStr) const {
+		auto& assetMap = MapFor<T>::value;
+		return assetMap.contains(_pathStr);
+	}
+
+	template<ValidAssetType T>
+	const T& GetAsset(AssetDefs::StableId _stableId) const {
+		assert(IsAssetLoaded(_stableId));
+
+		T* assetPtr = dynamic_cast<T*>(mStableIdToAsset.at(_stableId));
+		assert(assetPtr);
+
+		return *assetPtr;
+	}
+
+	template<ValidAssetType T>
+	const T& GetAsset(const std::string& _pathStr) const {
+		assert(IsAssetLoaded<T>(_pathStr));
+
+		T* assetPtr = MapFor<T>::value.at(_pathStr);
+		assert(assetPtr);
+
+		return *assetPtr;
+	}
+
+	template<ValidAssetType T>
+	T& LoadAsset(const std::filesystem::path& _filepath) {
+		const std::string assetName = StripFirstFolder(_filepath);
+		
 		// Store in asset map
-		_assetMap[assetName] = new AssetType(_path);
-		AssetType* loadedAsset = _assetMap[assetName];
+		auto& assetMap = MapFor<T>::value;
+		assetMap[assetName] = new T(_filepath);
+		T* loadedAsset = assetMap[assetName];
 
-		// Allocate a dense id
-		AssetDefs::DenseId denseId = _slotAllocator.AllocateId();
-		loadedAsset->mDenseId = denseId;
-
-		// Store stable -> dense id mapping
+		// Store stable id -> asset mapping
 		mStableIdToAsset[loadedAsset->GetStableId()] = loadedAsset;
 
-		// Optional callback
-		if (_callback) {
-			_callback(*loadedAsset, denseId, _slotAllocator.GetSlotForId(denseId));
+		if constexpr (HasSlotType<T>) {
+			// Allocate a dense id
+			auto& slotAllocator = AllocatorFor<T>::value;
+			AssetDefs::DenseId denseId = slotAllocator.AllocateId();
+			loadedAsset->mDenseId = denseId;
+
+			auto& callback = CallbacksFor<T>::loadCallback;
+			if (callback) {
+				callback(*loadedAsset, denseId, slotAllocator.GetSlotForId(denseId));
+			}
+		}
+		else {
+			auto& callback = CallbacksFor<T>::loadCallback;
+			if (callback) {
+				callback(*loadedAsset);
+			}
 		}
 
 		return *loadedAsset;
 	}
 
-	template<typename AssetType, typename SlotType, size_t AssetCount>
-	void TryUnloadAsset(const std::string& _pathStr, AssetMap<AssetType>& _assetMap, DenseToSlotAllocator<SlotType, AssetCount>& _slotAllocator, const std::string& _defaultAssetStr = "", UnloadCallback _callback = {}) {
+	template<ValidAssetType T>
+	void UnloadAsset(const std::string& _pathStr) {
+		auto& assetMap = MapFor<T>::value;
+
 		// No asset found with passed in string
-		if (!_assetMap.contains(_pathStr)) {
+		if (!assetMap.contains(_pathStr)) {
 			return;
 		}
 
 		// Do not allow unloading the default asset
-		if (!_defaultAssetStr.empty() && _pathStr == _defaultAssetStr) {
-			std::cerr << "Someone tried to unload '" << _defaultAssetStr << "' ... naughty!\n";
+		const std::string defaultAssetStr = AssetManagerGlobals::AssetTraits<T>::config.defaultAsset;
+		if (!defaultAssetStr.empty() && _pathStr == defaultAssetStr) {
+			std::cerr << "Someone tried to unload '" << defaultAssetStr << "' ... naughty!\n";
 			return;
 		}
 
-		AssetType* assetToUnload = _assetMap[_pathStr];
+		// Asset already null, just remove it from map
+		T* assetToUnload = assetMap[_pathStr];
 		if (!assetToUnload) {
-			// Asset already null, just remove it from map
-			_assetMap.erase(_pathStr);
+			assetMap.erase(_pathStr);
 			return;
 		}
 
-		// Retrieve all stored ids
 		AssetDefs::StableId stableId = assetToUnload->mStableId;
-		AssetDefs::DenseId denseId = assetToUnload->mDenseId;
-
-		// Free mappings
-		_slotAllocator.FreeId(denseId);
 		mStableIdToAsset.erase(stableId);
 
-		// Remove asset from asset map
-		_assetMap.erase(_pathStr);
+		// Only assets with slots (& dense id) have an unload callback
+		if constexpr (HasSlotType<T>) {
+			AssetDefs::DenseId denseId = assetToUnload->mDenseId;
+			AllocatorFor<T>::value.FreeId(denseId);
+
+			auto& callback = CallbacksFor<T>::unloadCallback;
+			if (callback) {
+				callback(denseId);
+			}
+		}
+
+		assetMap.erase(_pathStr);
 		delete assetToUnload;
-
-		// Optional callback
-		if (_callback) {
-			_callback(denseId);
-		}
 	}
 
-	template<typename AssetType>
-	AssetType& TryGetAsset(const std::string& _pathStr, const AssetMap<AssetType>& _assetMap) const {
-		assert(_assetMap.contains(_pathStr));
-
-		AssetType* asset = _assetMap.at(_pathStr);
-		assert(asset);
-
-		return *asset;
+	template<ValidAssetType T>
+	auto& GetLoadCallback() const {
+		return CallbacksFor<T>::loadCallback;
 	}
 
-public:
-	template<ValidAssetType AssetType>
-	AssetType& GetAssetFromStableId(AssetDefs::StableId _stableId) const {
-		assert(mStableIdToAsset.contains(_stableId));
-		return *dynamic_cast<AssetType*>(mStableIdToAsset.at(_stableId));
+	template<HasSlotType T>
+	auto& GetUnloadCallback() const {
+		return CallbacksFor<T>::unloadCallback;
 	}
-
-	template<ValidAssetType AssetType>
-	AssetType& GetAssetFromPath(const std::string& _pathStr) const {
-		if constexpr (std::is_same_v<AssetType, Texture>) {
-			return TryGetAsset(_pathStr, mTextures);
-		}
-		else if constexpr (std::is_same_v<AssetType, Material>) {
-			return TryGetAsset(_pathStr, mMaterials);
-		}
-	}
-
-	template<ValidAssetType AssetType>
-	AssetType& LoadAsset(const std::filesystem::path& _path) {
-		if constexpr (std::is_same_v<AssetType, Texture>) {
-			return TryLoadAsset(_path, mTextures, mTextureSlotAllocator, onTextureLoaded);
-		}
-		else if constexpr (std::is_same_v<AssetType, Material>) {
-			return TryLoadAsset(_path, mMaterials, mMaterialSlotAllocator, onMaterialLoaded);
-		}
-	}
-
-	template<ValidAssetType AssetType>
-	void UnloadAsset(const std::string& _pathStr) {
-		if constexpr (std::is_same_v<AssetType, Texture>) {
-			return TryUnloadAsset(_pathStr, mTextures, mTextureSlotAllocator, "textures\\default_texture.png", onTextureUnloaded);
-		}
-		else if constexpr (std::is_same_v<AssetType, Material>) {
-			return TryUnloadAsset(_pathStr, mMaterials, mMaterialSlotAllocator, "", onMaterialUnloaded);
-		}
-	}
-
-	template<ValidAssetType AssetType>
-	bool IsAssetLoaded(const std::string& _pathStr) const {
-		if constexpr (std::is_same_v<AssetType, Texture>) {
-			return mTextures.contains(_pathStr);
-		}
-		else if constexpr (std::is_same_v<AssetType, Material>) {
-			return mMaterials.contains(_pathStr);
-		}
-	}
-
-	bool IsAssetLoaded(AssetDefs::StableId _stableId) const;
 };

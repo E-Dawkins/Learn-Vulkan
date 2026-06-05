@@ -5,13 +5,15 @@
 #include "renderer/texture.h"
 
 AssetManager::~AssetManager() {
-	for (auto& [path, tex] : mTextures) {
+	for (auto& [path, tex] : MapFor<Texture>::value) {
 		delete tex;
 	}
 
-	for (auto& [path, mat] : mMaterials) {
+	for (auto& [path, mat] : MapFor<Material>::value) {
 		delete mat;
 	}
+
+	mStableIdToAsset.clear();
 }
 
 std::string AssetManager::StripFirstFolder(const std::filesystem::path& _path) {
