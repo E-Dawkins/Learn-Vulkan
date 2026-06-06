@@ -49,7 +49,7 @@ bool Vertex::operator == (const Vertex& _other) const {
 	return pos == _other.pos && color == _other.color && texCoord == _other.texCoord;
 }
 
-Mesh::Mesh(const std::filesystem::path& _filePath) {
+Mesh::Mesh(const std::filesystem::path& _filePath) : IAsset(_filePath) {
 	EnforceFileExtension(_filePath, ".mesh");
 
 	AilReader reader;

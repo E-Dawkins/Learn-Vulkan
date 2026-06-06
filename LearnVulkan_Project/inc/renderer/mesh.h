@@ -7,6 +7,7 @@
 
 #include <array>
 
+#include "utils/asset.h"
 #include "utils/file_reader.h"
 #include "utils/hash_utils.h"
 
@@ -38,7 +39,7 @@ namespace std {
 	};
 }
 
-class Mesh : IFileReader
+class Mesh : IFileReader, public IAsset
 {
 private:
 	std::vector<Vertex> mVertices;

@@ -7,12 +7,14 @@
 #include <stack>
 
 class Material;
+class Mesh;
 class Texture;
 
 template<typename T>
 concept ValidAssetType =
 	std::is_same_v<T, Texture> ||
-	std::is_same_v<T, Material>;
+	std::is_same_v<T, Material> ||
+	std::is_same_v<T, Mesh>;
 
 namespace AssetManagerGlobals {
 	struct AssetTraitConfig
@@ -162,7 +164,7 @@ public:
 	}
 
 	template<ValidAssetType T>
-	const T& GetAsset(AssetDefs::StableId _stableId) const {
+	T& GetAsset(AssetDefs::StableId _stableId) const {
 		assert(IsAssetLoaded(_stableId));
 
 		T* assetPtr = dynamic_cast<T*>(mStableIdToAsset.at(_stableId));
@@ -172,7 +174,7 @@ public:
 	}
 
 	template<ValidAssetType T>
-	const T& GetAsset(const std::string& _pathStr) const {
+	T& GetAsset(const std::string& _pathStr) const {
 		assert(IsAssetLoaded<T>(_pathStr));
 
 		T* assetPtr = MapFor<T>::value.at(_pathStr);
