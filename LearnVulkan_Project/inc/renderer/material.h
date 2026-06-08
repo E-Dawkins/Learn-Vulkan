@@ -1,6 +1,6 @@
 #pragma once
-#include "utils/asset.h"
-#include "utils/file_reader.h"
+#include "interfaces/asset.h"
+#include "interfaces/file_reader.h"
 #include "utils/type_defs.h"
 
 class Shader;

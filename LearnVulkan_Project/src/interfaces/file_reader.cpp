@@ -1,6 +1,6 @@
 #include "pch.h"
 
-#include "utils/file_reader.h"
+#include "interfaces/file_reader.h"
 
 void IFileReader::EnforceFileExtension(const std::filesystem::path& _filePath, const std::string& _extension) {
 	if (_filePath.extension() != _extension) {

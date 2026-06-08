@@ -1,5 +1,5 @@
 #pragma once
-#include "utils/file_reader.h"
+#include "interfaces/file_reader.h"
 
 #include "renderer/pipeline_layout_manager.h"
 

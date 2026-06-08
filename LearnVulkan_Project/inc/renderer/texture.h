@@ -1,6 +1,6 @@
 #pragma once
 #include <filesystem>
-#include "utils/asset.h"
+#include "interfaces/asset.h"
 
 class Texture : public IAsset
 {

@@ -7,8 +7,8 @@
 
 #include <array>
 
-#include "utils/asset.h"
-#include "utils/file_reader.h"
+#include "interfaces/asset.h"
+#include "interfaces/file_reader.h"
 #include "utils/hash_utils.h"
 
 class Material;

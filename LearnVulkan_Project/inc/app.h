@@ -1,5 +1,5 @@
 #pragma once
-#include "utils/singleton.h"
+#include "interfaces/singleton.h"
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>

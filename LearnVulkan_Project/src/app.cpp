@@ -9,7 +9,7 @@
 #include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
-#include "utils/asset_manager.h"
+#include "renderer/asset_manager.h"
 #include "utils/buffer_utils.h"
 #include "utils/image_utils.h"
 #include "utils/vulkan_ext_funcs.h"

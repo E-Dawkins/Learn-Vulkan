@@ -1,7 +1,7 @@
 #pragma once
-#include "utils/singleton.h"
+#include "interfaces/singleton.h"
 
-#include "utils/asset.h"
+#include "interfaces/asset.h"
 #include "utils/type_defs.h"
 
 #include <stack>

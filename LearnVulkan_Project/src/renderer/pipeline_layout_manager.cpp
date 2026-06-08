@@ -2,7 +2,7 @@
 #include "renderer/pipeline_layout_manager.h"
 
 #include "app.h"
-#include "utils/asset_manager.h"
+#include "renderer/asset_manager.h"
 #include "utils/hash_utils.h"
 
 PipelineLayoutManager::PipelineLayoutManager() {

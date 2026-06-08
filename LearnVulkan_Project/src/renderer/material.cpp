@@ -3,7 +3,7 @@
 
 #include "renderer/shader.h"
 #include "renderer/texture.h"
-#include "utils/asset_manager.h"
+#include "renderer/asset_manager.h"
 
 Material::Material(const std::filesystem::path& _filepath) : IAsset(_filepath) {
 	EnforceFileExtension(_filepath, ".material");

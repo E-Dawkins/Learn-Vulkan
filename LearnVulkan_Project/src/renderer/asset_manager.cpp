@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "utils/asset_manager.h"
+#include "renderer/asset_manager.h"
 
 #include "renderer/material.h"
 #include "renderer/texture.h"

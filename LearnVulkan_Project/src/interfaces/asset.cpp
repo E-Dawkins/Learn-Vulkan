@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "utils/asset.h"
+#include "interfaces/asset.h"
 
 IAsset::IAsset(const std::filesystem::path& _filePath) {
 	mStableId = StrToStableId(_filePath.string());
