@@ -27,6 +27,11 @@ public:
 	void BindMaterialResources(const VkCommandBuffer& _commandBuffer);
 	const std::string DebugStr() const;
 
+	inline const Shader& GetShader() const {
+		assert(mShader);
+		return *mShader;
+	}
+
 private:
 	Shader* CreateShaderFromAil(const AilReader& _reader) const;
 	void FillParamsFromAil(const AilReader& _reader);

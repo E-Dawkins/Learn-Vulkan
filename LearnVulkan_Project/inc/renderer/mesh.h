@@ -9,6 +9,7 @@
 
 #include "interfaces/asset.h"
 #include "interfaces/file_reader.h"
+#include "math/transform.h"
 #include "utils/hash_utils.h"
 
 class Material;
@@ -41,6 +42,9 @@ namespace std {
 
 class Mesh : IFileReader, public IAsset
 {
+public:
+	Transform transform;
+
 private:
 	std::vector<Vertex> mVertices;
 	std::vector<uint32_t> mIndices;

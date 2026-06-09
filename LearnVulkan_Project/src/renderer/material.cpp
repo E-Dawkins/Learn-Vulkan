@@ -36,8 +36,8 @@ void Material::BindMaterialResources(const VkCommandBuffer& _commandBuffer) {
 	vkCmdPushConstants(
 		_commandBuffer,
 		mShader->GetLayoutForShader(),
-		VK_SHADER_STAGE_ALL_GRAPHICS,
-		0,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		64, // TODO - make this not hard-coded (fragment pc range starts at offset 64)
 		sizeof(AssetDefs::DenseId),
 		&GetDenseId()
 	);

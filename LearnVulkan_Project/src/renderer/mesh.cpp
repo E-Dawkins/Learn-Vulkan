@@ -3,6 +3,7 @@
 
 #include "app.h"
 #include "renderer/material.h"
+#include "renderer/shader.h"
 #include "utils/buffer_utils.h"
 
 VkVertexInputBindingDescription Vertex::GetBindingDescription() {
@@ -89,6 +90,15 @@ void Mesh::BindMeshResources(const VkCommandBuffer& _commandBuffer) const {
 
 	vkCmdBindVertexBuffers(_commandBuffer, 0, 1, &mVertexBuffer, &zeroOffset);
 	vkCmdBindIndexBuffer(_commandBuffer, mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdPushConstants(
+		_commandBuffer,
+		mMaterial->GetShader().GetLayoutForShader(),
+		VK_SHADER_STAGE_VERTEX_BIT,
+		0, // TODO - make this offset dynamic, not hard-coded
+		sizeof(glm::mat4),
+		&transform.GetMatrix()
+	);
 }
 
 void Mesh::DrawMesh(const VkCommandBuffer& _commandBuffer) const {

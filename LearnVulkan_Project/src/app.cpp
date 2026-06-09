@@ -1496,14 +1496,15 @@ void App::UpdateUniformBuffer(uint32_t _currentImage) {
 
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+	startTime = currentTime; // required to make 'deltaTime' actually 'delta'
+
+	// TODO - move this somewhere else now that mesh has its' own transform (matrix)
+	mTempMesh->transform.AddRotation(glm::angleAxis(
+		deltaTime * glm::radians(90.f),	// rotation (in radians)
+		glm::vec3(0.f, 0.f, 1.f)		// axis of rotation
+	));
 
 	CameraData ubo = {};
-	ubo.model = glm::rotate(
-		glm::mat4(1.f),						// inital matrix
-		deltaTime * glm::radians(90.f),		// rotation (in radians)
-		glm::vec3(0.f, 0.f, 1.f)			// axis of rotation
-	);
-
 	ubo.view = glm::lookAt(
 		glm::vec3(2.f),				// camera position
 		glm::vec3(0.f),				// position to look at

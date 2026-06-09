@@ -22,7 +22,7 @@ layout (set = 1, binding = 3) readonly buffer DenseIdToMaterialSlot {
 };
 
 layout(push_constant) uniform PushConstants {
-	uint denseMatSlotId;
+	layout(offset = 64) uint denseMatSlotId;
 } pc;
 
 layout (location = 0) in vec3 iColor;
