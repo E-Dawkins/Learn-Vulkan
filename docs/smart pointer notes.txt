@@ -1,0 +1,55 @@
+smart pointer notes
+
+TLDR:
+- always start by using a unique_ptr, never raw pointer
+- if multiple systems/objects need to guarantee the lifetime of an object use shared_ptr
+- if an object has one true owner (manages lifetime) but multiple references, use weak_ptr
+  for the references to the object, and shared_ptr for the true owner of the object
+
+3 types of smart pointer:
+- unique_ptr
+- shared_ptr
+- weak_ptr
+
+general notes:
+- unique_ptr & shared_ptr will auto-free the underlying raw pointer
+  when they go out of scope (or reference count = 0 for shared_ptr)
+- this means that using smart pointers *should* never cause memory leaks,
+  dangling pointers, or 'wild pointers' (pointers to uninitialized memory)
+- basically, avoid raw pointers as much as possible in modern C++
+- in modern C++ standards raw pointers are allowed in small code blocks,
+  helper functions, loops, and when there is no chance of confusion about ownership
+- smart pointers contain a 'reset' function to explicitly release ownership
+- if you absolutely need to, smart pointers also have 'get' to retrieve the raw pointer
+
+IMPORTANT NOTES:
+- always create smart pointers on a separate line of code, never within a param list
+- i.e. ClassConstructor() : mSharedPtr(new T()) *can* leak resources,
+  instead we do ClassConstructor() { mSharedPtr = make_shared<T>(); }
+
+unique_ptr notes:
+- only allows one owner of the object at a time
+- only way of assigning to another unique_ptr is transferring ownership
+- i.e. unique_ptr a = make_unique(...), unique_ptr b = move(a)
+  will nullify a, but transfer the underlying object to b
+- it is recommended to use make_unique(...), rather than unique_ptr(new T())
+- the size of the unique_ptr is the same as a raw pointer
+
+shared_ptr notes:
+- allows multiple 'shared_ptr' to point to the same underlying memory
+- keeps track of shared_ptr via a reference count within a control block
+- i.e. shared_ptr a = make_shared(...), shared_ptr b = a
+  will NOT nullify a, but create another pointer to the underlying object
+- it is recommended to use make_shared(...), rather than shared_ptr(new T())
+- the size of a shared_ptr is the size of the raw pointer + pointer to control block
+
+weak_ptr notes:
+- does NOT own any object, but instead observes an object owned by a shared_ptr
+- commonly used in the case of two shared_ptr's pointing at each other
+- this prevents circular logic (and memory never being deallocated)
+- it does this by NOT incrementing the reference count
+- i.e. shared_ptr a = make_shared(...), weak_ptr b = a
+  will point to the same underlying object, but NOT increase the reference count
+- weak_ptr also has the 'lock' method to retrieve the owning shared_ptr thread-safe
+- 'lock' creates a new (possible empty) shared_ptr, thereby 'locking' the lifetime of the
+  shared_ptr ensuring that the object will NOT be destroyed while we use it in some scope
