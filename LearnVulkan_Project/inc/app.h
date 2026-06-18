@@ -124,7 +124,7 @@ private:
 	VkDeviceMemory mColorImageMemory;
 	VkImageView mColorImageView;
 
-	Mesh* mTempMesh;
+	std::weak_ptr<Mesh> mTempMesh;
 
 public:
 	bool framebufferResized = false;
@@ -183,10 +183,10 @@ private:
 
 	void CreateMaterialBuffers();
 	void CreateMaterialDescriptorSet();
-	void OnTextureLoaded(Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
+	void OnTextureLoaded(std::weak_ptr<Texture> _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
 	void OnTextureUnloaded(AssetDefs::DenseId _denseId);
 	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
-	void OnMaterialLoaded(Material& _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot);
+	void OnMaterialLoaded(std::weak_ptr<Material> _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot);
 	void OnMaterialUnloaded(AssetDefs::DenseId _denseId);
 
 	uint32_t FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const;
@@ -199,5 +199,5 @@ private:
 	void MainLoop();
 	void DrawFrame();
 	void UpdateUniformBuffer(uint32_t _currentImage);
-	void Cleanup();
+	void OnCleanup() override;
 };

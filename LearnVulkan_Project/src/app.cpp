@@ -97,9 +97,15 @@ static void FramebufferResizeCallback(GLFWwindow* /*_window*/, int /*_width*/, i
 }
 
 static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _action, int /*_mods*/) {
+	auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").lock();
+	if (!testMaterial) {
+		std::cout << "MouseButtonCallback: 'testMaterial' is invalid!\n";
+		return;
+	}
+
 	if (_button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS) {
 		// Grab params* from material asset, and directly access its elements
-		AssetDefs::DenseId& texId = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params->denseTexIds[0];
+		AssetDefs::DenseId& texId = testMaterial->params->denseTexIds[0];
 		texId = (texId + 1) % 3;
 
 		if (texId == 0) { // now that we have a default texture, skip it
@@ -109,7 +115,7 @@ static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _actio
 
 	if (_button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS) {
 		// Grab params* from material asset, and directly access its elements
-		int32_t& intVar = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").params->intVars[0];
+		int32_t& intVar = testMaterial->params->intVars[0];
 		intVar = (intVar + 1) % 6;
 	}
 
@@ -131,7 +137,6 @@ void App::Run() {
 	InitWindow();
 	InitVulkan();
 	MainLoop();
-	Cleanup();
 }
 
 void App::InitWindow() {
@@ -192,10 +197,12 @@ void App::InitVulkan() {
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\viking_room.png");
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\statue.jpg");
 
-	Material* testMat = &AssetManager::GetInstance().LoadAsset<Material>("assets\\materials\\test.material");
+	auto testMat = AssetManager::GetInstance().LoadAsset<Material>("assets\\materials\\test.material");
 
-	mTempMesh = &AssetManager::GetInstance().LoadAsset<Mesh>("assets\\models\\viking_room.mesh");
-	mTempMesh->SetMaterial(testMat);
+	mTempMesh = AssetManager::GetInstance().LoadAsset<Mesh>("assets\\models\\viking_room.mesh");
+	if (auto meshLock = mTempMesh.lock()) {
+		meshLock->SetMaterial(testMat);
+	}
 }
 
 void App::CreateInstance() {
@@ -1045,7 +1052,13 @@ void App::CreateMaterialDescriptorSet() {
 	mDenseIdToMaterialSlot.WriteToDescriptorSet(mMaterialDescriptorSet, 3);
 }
 
-void App::OnTextureLoaded(Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot) {
+void App::OnTextureLoaded(std::weak_ptr<Texture> _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot) {
+	auto tex = _tex.lock();
+	if (!tex) {
+		std::cout << "OnTextureLoaded: '_tex' is invalid!\n";
+		return;
+	}
+
 	mDenseIdToTextureSlot.GetElement<AssetDefs::TextureSlot>(_denseId) = _texSlot;
 
 	// We need a new texture sampler for this texture index
@@ -1055,7 +1068,7 @@ void App::OnTextureLoaded(Texture& _tex, AssetDefs::DenseId _denseId, AssetDefs:
 
 	VkDescriptorImageInfo imageInfo{
 		.sampler = mTextureSlotToSampler[_texSlot],
-		.imageView = _tex.GetImageView(),
+		.imageView = tex->GetImageView(),
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
@@ -1143,15 +1156,21 @@ void App::CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot) {
 	}
 }
 
-void App::OnMaterialLoaded(Material& _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot) {
+void App::OnMaterialLoaded(std::weak_ptr<Material> _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot) {
+	auto mat = _mat.lock();
+	if (!mat) {
+		std::cout << "OnMaterialLoaded: '_mat' is invalid!\n";
+		return;
+	}
+
 	MaterialParams& paramsToFill = mMaterialParamsBuffer.GetElement<MaterialParams>(_denseId);
 	mDenseIdToMaterialSlot.GetElement<AssetDefs::MaterialSlot>(_denseId) = _matSlot;
 
 	// Copy material params into ssbo
-	paramsToFill = *_mat.params;
+	paramsToFill = *mat->params;
 
 	// Set material to point to ssbo memory
-	_mat.params = &paramsToFill;
+	mat->params = &paramsToFill;
 }
 
 void App::OnMaterialUnloaded(AssetDefs::DenseId _denseId) {
@@ -1260,8 +1279,10 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 	// -- Render Pass --
 	vkCmdBeginRenderPass(_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
+		auto lockedMesh = mTempMesh.lock();
+
 		// This is where the shader (pipeline) and vertex/index buffers get bound for this frame
-		mTempMesh->BindMeshResources(_commandBuffer);
+		if (lockedMesh) lockedMesh->BindMeshResources(_commandBuffer);
 
 		// Bind descriptor sets - this is for uniform buffers
 
@@ -1299,7 +1320,7 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 		vkCmdSetScissor(_commandBuffer, 0, 1, &scissor);
 
 		// This is where the actual draw call happens for our mesh
-		mTempMesh->DrawMesh(_commandBuffer);
+		if (lockedMesh) lockedMesh->DrawMesh(_commandBuffer);
 	}
 	vkCmdEndRenderPass(_commandBuffer);
 
@@ -1499,10 +1520,12 @@ void App::UpdateUniformBuffer(uint32_t _currentImage) {
 	startTime = currentTime; // required to make 'deltaTime' actually 'delta'
 
 	// TODO - move this somewhere else now that mesh has its' own transform (matrix)
-	mTempMesh->transform.AddRotation(glm::angleAxis(
-		deltaTime * glm::radians(90.f),	// rotation (in radians)
-		glm::vec3(0.f, 0.f, 1.f)		// axis of rotation
-	));
+	if (auto lockedMesh = mTempMesh.lock()) {
+		lockedMesh->transform.AddRotation(glm::angleAxis(
+			deltaTime * glm::radians(90.f),	// rotation (in radians)
+			glm::vec3(0.f, 0.f, 1.f)		// axis of rotation
+		));
+	}
 
 	CameraData ubo = {};
 	ubo.view = glm::lookAt(
@@ -1527,7 +1550,14 @@ void App::UpdateUniformBuffer(uint32_t _currentImage) {
 	memcpy(mUniformBuffersMapped[_currentImage], &ubo, sizeof(ubo));
 }
 
-void App::Cleanup() {
+void App::OnCleanup() {
+	// Ensure everything has finished. This is only really necessary if the
+	// program is ended via a thrown exception, main loop exit does this already
+	{
+		glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
+		vkDeviceWaitIdle(mLogicalDevice);
+	}
+
 	CleanupSwapChain();
 
 	for (auto& [slot, texSampler] : mTextureSlotToSampler) {
@@ -1547,8 +1577,6 @@ void App::Cleanup() {
 
 	vkDestroyDescriptorPool(mLogicalDevice, mFrameDescriptorPool, nullptr);
 	vkDestroyDescriptorPool(mLogicalDevice, mMaterialDescriptorPool, nullptr);
-
-	delete mTempMesh;
 
 	for (size_t i = 0; i < mRenderPasses.size(); i++) {
 		vkDestroyRenderPass(mLogicalDevice, mRenderPasses[i], nullptr);

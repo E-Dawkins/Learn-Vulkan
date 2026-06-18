@@ -16,6 +16,12 @@ concept ValidAssetType =
 	std::is_same_v<T, Material> ||
 	std::is_same_v<T, Mesh>;
 
+using AllAssetTypes = std::tuple<
+	std::type_identity<Texture>,
+	std::type_identity<Material>,
+	std::type_identity<Mesh>
+>;
+
 namespace AssetManagerGlobals {
 	struct AssetTraitConfig
 	{
@@ -112,13 +118,13 @@ class AssetManager : public ISingleton<AssetManager>
 {
 private:
 	// Shared mapping, as stable ids are unique to asset paths
-	std::unordered_map<AssetDefs::StableId, IAsset*> mStableIdToAsset;
+	std::unordered_map<AssetDefs::StableId, std::shared_ptr<IAsset>> mStableIdToAsset;
 
 private:
 	template<ValidAssetType T>
 	struct MapFor
 	{
-		static inline std::unordered_map<std::string, T*> value;
+		static inline std::unordered_map<std::string, std::shared_ptr<T>> value;
 	};
 
 	template<HasSlotType T>
@@ -137,7 +143,7 @@ private:
 	{
 		using TraitsType = AssetManagerGlobals::AssetTraits<T>;
 
-		static inline std::function<void(T&, AssetDefs::DenseId, typename TraitsType::SlotType)> loadCallback;
+		static inline std::function<void(std::weak_ptr<T>, AssetDefs::DenseId, typename TraitsType::SlotType)> loadCallback;
 		static inline std::function<void(AssetDefs::DenseId)> unloadCallback;
 	};
 
@@ -145,14 +151,19 @@ private:
 		requires (ValidAssetType<T> && !HasSlotType<T>)
 	struct CallbacksFor<T>
 	{
-		static inline std::function<void(T&)> loadCallback;
+		static inline std::function<void(std::weak_ptr<T>)> loadCallback;
 	};
 
 public:
-	~AssetManager();
+	void OnCleanup() override;
 
 private:
 	std::string StripFirstFolder(const std::filesystem::path& _filepath);
+
+	template<ValidAssetType T>
+	void ClearMap() {
+		MapFor<T>::value.clear();
+	}
 
 public:
 	bool IsAssetLoaded(AssetDefs::StableId _stableId) const;
@@ -164,36 +175,36 @@ public:
 	}
 
 	template<ValidAssetType T>
-	T& GetAsset(AssetDefs::StableId _stableId) const {
+	std::weak_ptr<T> GetAsset(AssetDefs::StableId _stableId) const {
 		assert(IsAssetLoaded(_stableId));
 
-		T* assetPtr = dynamic_cast<T*>(mStableIdToAsset.at(_stableId));
-		assert(assetPtr);
+		auto& assetSharedPtr = mStableIdToAsset.at(_stableId);
+		assert(assetSharedPtr);
 
-		return *assetPtr;
+		return std::dynamic_pointer_cast<T>(assetSharedPtr);
 	}
 
 	template<ValidAssetType T>
-	T& GetAsset(const std::string& _pathStr) const {
+	std::weak_ptr<T> GetAsset(const std::string& _pathStr) const {
 		assert(IsAssetLoaded<T>(_pathStr));
 
-		T* assetPtr = MapFor<T>::value.at(_pathStr);
-		assert(assetPtr);
+		auto& assetSharedPtr = MapFor<T>::value.at(_pathStr);
+		assert(assetSharedPtr);
 
-		return *assetPtr;
+		return std::dynamic_pointer_cast<T>(assetSharedPtr);
 	}
 
 	template<ValidAssetType T>
-	T& LoadAsset(const std::filesystem::path& _filepath) {
+	std::weak_ptr<T> LoadAsset(const std::filesystem::path& _filepath) {
 		const std::string assetName = StripFirstFolder(_filepath);
 		
 		// Store in asset map
 		auto& assetMap = MapFor<T>::value;
-		assetMap[assetName] = new T(_filepath);
-		T* loadedAsset = assetMap[assetName];
+		assetMap[assetName] = std::make_shared<T>(_filepath);
+		auto& loadedAsset = assetMap[assetName];
 
 		// Store stable id -> asset mapping
-		mStableIdToAsset[loadedAsset->GetStableId()] = loadedAsset;
+		mStableIdToAsset[loadedAsset->GetStableId()] = assetMap[assetName];
 
 		if constexpr (HasSlotType<T>) {
 			// Allocate a dense id
@@ -203,17 +214,17 @@ public:
 
 			auto& callback = CallbacksFor<T>::loadCallback;
 			if (callback) {
-				callback(*loadedAsset, denseId, slotAllocator.GetSlotForId(denseId));
+				callback(loadedAsset, denseId, slotAllocator.GetSlotForId(denseId));
 			}
 		}
 		else {
 			auto& callback = CallbacksFor<T>::loadCallback;
 			if (callback) {
-				callback(*loadedAsset);
+				callback(loadedAsset);
 			}
 		}
 
-		return *loadedAsset;
+		return std::dynamic_pointer_cast<T>(loadedAsset);
 	}
 
 	template<ValidAssetType T>
@@ -233,12 +244,12 @@ public:
 		}
 
 		// Asset already null, just remove it from map
-		T* assetToUnload = assetMap[_pathStr];
-		if (!assetToUnload) {
+		if (!assetMap[_pathStr]) {
 			assetMap.erase(_pathStr);
 			return;
 		}
 
+		std::shared_ptr<T>& assetToUnload = assetMap[_pathStr];
 		AssetDefs::StableId stableId = assetToUnload->mStableId;
 		mStableIdToAsset.erase(stableId);
 
@@ -254,7 +265,6 @@ public:
 		}
 
 		assetMap.erase(_pathStr);
-		delete assetToUnload;
 	}
 
 	template<ValidAssetType T>

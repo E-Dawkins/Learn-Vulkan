@@ -5,12 +5,16 @@ template <typename T>
 class ISingleton
 {
 private:
-	static inline T* mInstance = nullptr;
+	static inline ISingleton* mInstance = nullptr;
 
 protected:
-	// Private so only the exposed singleton functions can create/destroy our instance
+	// Protected so only the exposed singleton functions can create/destroy our instance
+	// ... but sub-classes can still override with their own constructor/destructor
 	ISingleton() = default;
 	~ISingleton() = default;
+
+	virtual void OnInitialized() {}
+	virtual void OnCleanup() {}
 
 public:
 	// Delete copy constructor + copy assignment operator
@@ -26,9 +30,12 @@ public:
 		assert(!mInstance);
 
 		mInstance = new T();
+		mInstance->OnInitialized();
 	}
 
 	static void Shutdown() {
+		mInstance->OnCleanup();
+
 		delete mInstance;
 		mInstance = nullptr;
 	}
@@ -37,6 +44,6 @@ public:
 		// Ensure instance has been initialized
 		assert(mInstance);
 
-		return *mInstance;
+		return *dynamic_cast<T*>(mInstance);
 	}
 };

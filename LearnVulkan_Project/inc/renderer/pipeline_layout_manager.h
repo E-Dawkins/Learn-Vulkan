@@ -51,8 +51,8 @@ private:
 	std::unordered_map<size_t, std::pair<VkPipelineLayout, uint8_t>> mLayouts;
 
 public:
-	PipelineLayoutManager();
-	~PipelineLayoutManager();
+	void OnInitialized() override;
+	void OnCleanup() override;
 
 private:
 	void InitPresets();

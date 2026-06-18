@@ -76,14 +76,17 @@ Mesh::~Mesh() {
 	vkFreeMemory(logicalDevice, mVertexBufferMemory, nullptr);
 }
 
-void Mesh::SetMaterial(Material* _material) {
-	assert(_material);
-
+void Mesh::SetMaterial(std::weak_ptr<Material> _material) {
 	mMaterial = _material;
 }
 
 void Mesh::BindMeshResources(const VkCommandBuffer& _commandBuffer) const {
-	mMaterial->BindMaterialResources(_commandBuffer);
+	auto lockedMaterial = mMaterial.lock();
+	if (!lockedMaterial) {
+		return;
+	}
+
+	lockedMaterial->BindMaterialResources(_commandBuffer);
 
 	// Bind buffers
 	static const VkDeviceSize zeroOffset = 0;
@@ -93,7 +96,7 @@ void Mesh::BindMeshResources(const VkCommandBuffer& _commandBuffer) const {
 
 	vkCmdPushConstants(
 		_commandBuffer,
-		mMaterial->GetShader().GetLayoutForShader(),
+		lockedMaterial->GetShader().GetLayoutForShader(),
 		VK_SHADER_STAGE_VERTEX_BIT,
 		0, // TODO - make this offset dynamic, not hard-coded
 		sizeof(glm::mat4),

@@ -1,7 +1,7 @@
 smart pointer notes
 
 TLDR:
-- always start by using a unique_ptr, never raw pointer
+- always start by using a unique_ptr, never raw pointer (unless lifetime is manually controlled)
 - if multiple systems/objects need to guarantee the lifetime of an object use shared_ptr
 - if an object has one true owner (manages lifetime) but multiple references, use weak_ptr
   for the references to the object, and shared_ptr for the true owner of the object

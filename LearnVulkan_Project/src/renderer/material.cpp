@@ -141,7 +141,9 @@ void Material::FillParamsFromAil(const AilReader& _reader) {
 
 			const AssetManager& manager = AssetManager::GetInstance();
 			if (manager.IsAssetLoaded(stableId)) {
-				params->denseTexIds[i] = manager.GetAsset<Texture>(stableId).GetDenseId();
+				if (auto tex = manager.GetAsset<Texture>(stableId).lock()) {
+					params->denseTexIds[i] = tex->GetDenseId();
+				}
 			}
 		}
 	}

@@ -53,13 +53,13 @@ private:
 	VkBuffer mIndexBuffer;
 	VkDeviceMemory mIndexBufferMemory;
 
-	Material* mMaterial;
+	std::weak_ptr<Material> mMaterial;
 
 public:
 	Mesh(const std::filesystem::path& _filePath);
 	~Mesh();
 
-	void SetMaterial(Material* _material);
+	void SetMaterial(std::weak_ptr<Material> _material);
 
 	void BindMeshResources(const VkCommandBuffer& _commandBuffer) const;
 	void DrawMesh(const VkCommandBuffer& _commandBuffer) const;

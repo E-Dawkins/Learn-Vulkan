@@ -5,13 +5,13 @@
 #include "renderer/asset_manager.h"
 #include "utils/hash_utils.h"
 
-PipelineLayoutManager::PipelineLayoutManager() {
+void PipelineLayoutManager::OnInitialized() {
 	InitPresets();
 	CreateDescriptorSetLayouts();
 	CreatePresetLayouts();
 }
 
-PipelineLayoutManager::~PipelineLayoutManager() {
+void PipelineLayoutManager::OnCleanup() {
 	const auto& logicalDevice = App::GetInstance().GetLogicalDevice();
 
 	for (const auto& [hash, pipelineIndexPair] : mLayouts) {

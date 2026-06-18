@@ -4,14 +4,11 @@
 #include "renderer/material.h"
 #include "renderer/texture.h"
 
-AssetManager::~AssetManager() {
-	for (auto& [path, tex] : MapFor<Texture>::value) {
-		delete tex;
-	}
-
-	for (auto& [path, mat] : MapFor<Material>::value) {
-		delete mat;
-	}
+void AssetManager::OnCleanup() {
+	// Run 'ClearMap' for each type specified in 'AllAssetTypes'
+	std::apply([this](auto... assetTypes) {
+		(ClearMap<typename decltype(assetTypes)::type>(), ...);
+	}, AllAssetTypes{});
 
 	mStableIdToAsset.clear();
 }

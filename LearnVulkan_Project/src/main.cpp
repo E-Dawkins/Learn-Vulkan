@@ -12,6 +12,7 @@ int main() {
 		App::Shutdown();
 
 		std::cerr << e.what() << "\n";
+		std::cout << "\nPress Enter to continue...\n";
 		std::cin.get();
 		return 1;
 	}
