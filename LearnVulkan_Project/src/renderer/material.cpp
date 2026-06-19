@@ -11,14 +11,11 @@ Material::Material(const std::filesystem::path& _filepath) : IAsset(_filepath) {
 	AilReader reader;
 	ReadFileAsAil(_filepath, reader);
 
-	mShader = CreateShaderFromAil(reader);
+	CreateShaderFromAil(reader);
 	FillParamsFromAil(reader);
 }
 
 Material::~Material() {
-	delete mShader;
-	mShader = nullptr;
-
 	// We do not need to free params* as it points to GPU memory
 	// and will be freed at some point by the renderer
 	// delete params;
@@ -50,7 +47,7 @@ const std::string Material::DebugStr() const {
 	);
 }
 
-Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
+void Material::CreateShaderFromAil(const AilReader& _reader) {
 	auto warn_user = [this](const std::string& _s) {
 		std::cerr << "WARNING: No " << _s << " found on disk for " << DebugStr() << "\n";
 	};
@@ -58,7 +55,7 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
 	auto shaderNode = _reader.TryGetNode("shader");
 	if (!shaderNode) {
 		warn_user("shader params");
-		return nullptr;
+		return;
 	}
 
 	std::vector<ShaderStage> shaderStages;
@@ -77,7 +74,7 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
 	}
 	else {
 		warn_user("shaderStages");
-		return nullptr;
+		return;
 	}
 
 	RasterizerState rasterizerState;
@@ -96,7 +93,7 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
 	}
 	else {
 		warn_user("rasterizerState");
-		return nullptr;
+		return;
 	}
 
 	BlendModel blendModel = BlendModel::Opaque;
@@ -109,7 +106,7 @@ Shader* Material::CreateShaderFromAil(const AilReader& _reader) const {
 		shadingModel = shadingNode->GetAsSizetCasted<ShadingModel>();
 	}
 
-	return new Shader(
+	mShader = std::make_unique<Shader>(
 		shaderStages,
 		blendModel,
 		shadingModel,

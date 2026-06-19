@@ -15,10 +15,10 @@ struct MaterialParams
 class Material : IFileReader, public IAsset
 {
 private:
-	Shader* mShader;
+	std::unique_ptr<Shader> mShader;
 
 public:
-	MaterialParams* params = nullptr;
+	MaterialParams* params = nullptr; // eventually will point to GPU-side memory
 
 public:
 	Material(const std::filesystem::path& _filepath);
@@ -27,12 +27,9 @@ public:
 	void BindMaterialResources(const VkCommandBuffer& _commandBuffer);
 	const std::string DebugStr() const;
 
-	inline const Shader& GetShader() const {
-		assert(mShader);
-		return *mShader;
-	}
+	inline const Shader& GetShader() const { return *mShader; }
 
 private:
-	Shader* CreateShaderFromAil(const AilReader& _reader) const;
+	void CreateShaderFromAil(const AilReader& _reader);
 	void FillParamsFromAil(const AilReader& _reader);
 };

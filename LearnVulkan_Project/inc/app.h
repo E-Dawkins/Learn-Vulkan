@@ -54,7 +54,7 @@ private:
 	VkBuffer mBuffer;
 	VkDeviceMemory mDeviceMemory;
 	VkDeviceSize mBufferSize;
-	void* mPersistentMapping;
+	void* mPersistentMapping; // points to GPU-side memory
 
 public:
 	void Init(VkDeviceSize _size);

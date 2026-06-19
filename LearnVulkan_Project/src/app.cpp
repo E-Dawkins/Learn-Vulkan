@@ -1168,6 +1168,9 @@ void App::OnMaterialLoaded(std::weak_ptr<Material> _mat, AssetDefs::DenseId _den
 
 	// Copy material params into ssbo
 	paramsToFill = *mat->params;
+	
+	// Free CPU-side pointer
+	delete mat->params;
 
 	// Set material to point to ssbo memory
 	mat->params = &paramsToFill;
