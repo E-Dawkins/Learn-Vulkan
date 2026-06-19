@@ -1,0 +1,55 @@
+fold expressions notes
+
+- added in C++17, fold expressions allow to reduce or "fold" a pack of parameters
+  over some binary operator, simplifying operations on variadic templates.
+
+syntax can look like one of the following:
+- (pack op ...)         => unary right fold
+- (... op pack)         => unary left fold
+- (pack op ... op init) => binary right fold
+- (init op ... op pack) => binary left fold
+
+what do any of those mean?
+- 'op' => a binary operator (i.e. +, -, boolean expression, etc.)
+- 'pack' => a pack / collection of items that have not been determined yet
+            i.e. a placeholder for some values that will be filled later on
+- 'init' => expression or statement that doesn't involve placeholders,
+            a complete & fully defined piece of code / operation
+
+full list of all 32 binary operators:
+- + - * / % ^ & | = < > << >> += -= *= /= %= ^= &= |= <<= >>= == != <= >= && || , .* ->*
+
+IMPORTANT NOTES:
+- opening and closing parens are required for a fold expression
+- in binary fold expressions, both operators must be the same
+- when a unary fold expression is used with an empty pack, only these operators are allowed:
+  - AND '&&' => value for empty pack is 'true'
+  - OR '||' => value for empty pack is 'false'
+  - comma operator ',' => value for empty pack is 'void()'
+- if the 'init' or 'pack' expression contains an operator with precedence
+  below cast at the top level, it must be surrounded by parens, i.e.
+  template<typename... Args> int sum(Args&&... args) {
+  //  return (args + ... + 1 * 2);   // Error: operator with precedence below cast
+      return (args + ... + (1 * 2)); // OK
+  }
+
+basic examples
+- template <typename... Args> bool all(Args... args) {
+      return (... && args);
+  }
+  uses a unary left fold with '&&' op to check if all args are true
+
+- template<typename... Args> int sum(Args&&... args) {
+      return (args + ...);
+  }
+  uses a unary right fold with '+' op to sum all args
+
+- template<typename... Ts> bool allTrue(Ts... values) {
+      return (true && ... && values);
+  }
+  uses a binary left fold to check if all args are true, but this version works with empty args
+
+- template<typename... Ts> auto product(Ts... values) {
+      return (values * ... * 2);
+  }
+  uses a binary right fold to multiply all args, and then multiply by 2 (the initial value)
