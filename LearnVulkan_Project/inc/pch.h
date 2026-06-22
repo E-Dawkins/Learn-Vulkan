@@ -17,6 +17,7 @@
 #include <tiny_obj_loader.h>
 
 // stl
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <set>

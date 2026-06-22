@@ -50,11 +50,10 @@ private:
 	std::vector<VkDescriptorSetLayout> mDescriptorSetLayouts;
 	std::unordered_map<size_t, std::pair<VkPipelineLayout, uint8_t>> mLayouts;
 
-public:
+private:
 	void OnInitialized() override;
 	void OnCleanup() override;
 
-private:
 	void InitPresets();
 	void CreateDescriptorSetLayouts();
 	void CreatePresetLayouts();

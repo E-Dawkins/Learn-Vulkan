@@ -3,9 +3,12 @@
 
 #include "app.h"
 #include "renderer/asset_manager.h"
+#include "utils/debug_logger.h"
 #include "utils/hash_utils.h"
 
 void PipelineLayoutManager::OnInitialized() {
+	LOG_MSG("Init", LogVerbosity::Info);
+
 	InitPresets();
 	CreateDescriptorSetLayouts();
 	CreatePresetLayouts();
@@ -25,6 +28,8 @@ void PipelineLayoutManager::OnCleanup() {
 	mDescriptorSetLayouts.clear();
 
 	mPresets.clear();
+
+	LOG_MSG("Cleanup", LogVerbosity::Info);
 }
 
 void PipelineLayoutManager::InitPresets() {

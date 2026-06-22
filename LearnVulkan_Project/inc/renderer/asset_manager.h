@@ -2,13 +2,14 @@
 #include "interfaces/singleton.h"
 
 #include "interfaces/asset.h"
+#include "utils/debug_logger.h"
 #include "utils/type_defs.h"
 
 #include <stack>
 
-class Material;
-class Mesh;
-class Texture;
+#include "renderer/material.h"
+#include "renderer/mesh.h"
+#include "renderer/texture.h"
 
 template<typename T>
 concept ValidAssetType =
@@ -119,6 +120,7 @@ class AssetManager : public ISingleton<AssetManager>
 private:
 	// Shared mapping, as stable ids are unique to asset paths
 	std::unordered_map<AssetDefs::StableId, std::shared_ptr<IAsset>> mStableIdToAsset;
+	bool mIsCleaningUp = false;
 
 private:
 	template<ValidAssetType T>
@@ -154,15 +156,21 @@ private:
 		static inline std::function<void(std::weak_ptr<T>)> loadCallback;
 	};
 
-public:
+private:
+	void OnInitialized() override;
 	void OnCleanup() override;
 
-private:
 	std::string StripFirstFolder(const std::filesystem::path& _filepath);
 
 	template<ValidAssetType T>
 	void ClearMap() {
-		MapFor<T>::value.clear();
+		auto& assetMap = MapFor<T>::value;
+
+		while (!assetMap.empty()) {
+			UnloadAsset<T>(assetMap.begin()->first);
+		}
+
+		assetMap.clear();
 	}
 
 public:
@@ -224,6 +232,9 @@ public:
 			}
 		}
 
+		LOG_MSG(std::format("Loaded asset (stableId = {}, name = '{}')", 
+			loadedAsset->GetStableId(), _filepath.filename().string()), LogVerbosity::Info);
+
 		return std::dynamic_pointer_cast<T>(loadedAsset);
 	}
 
@@ -236,11 +247,13 @@ public:
 			return;
 		}
 
-		// Do not allow unloading the default asset
-		const std::string defaultAssetStr = AssetManagerGlobals::AssetTraits<T>::config.defaultAsset;
-		if (!defaultAssetStr.empty() && _pathStr == defaultAssetStr) {
-			std::cerr << "Someone tried to unload '" << defaultAssetStr << "' ... naughty!\n";
-			return;
+		// If not cleaning up, prevent unloading of default asset
+		if (!mIsCleaningUp) {
+			const std::string defaultAssetStr = AssetManagerGlobals::AssetTraits<T>::config.defaultAsset;
+			if (!defaultAssetStr.empty() && _pathStr == defaultAssetStr) {
+				std::cerr << "Someone tried to unload '" << defaultAssetStr << "' ... naughty!\n";
+				return;
+			}
 		}
 
 		// Asset already null, just remove it from map
@@ -263,6 +276,11 @@ public:
 				callback(denseId);
 			}
 		}
+
+		const size_t dirPos = _pathStr.rfind('\\');
+		const std::string fileName = (dirPos == _pathStr.npos ? _pathStr : _pathStr.substr(dirPos + 1));
+		LOG_MSG(std::format("Unloaded asset (stableId = {}, name = '{}')",
+			stableId, fileName), LogVerbosity::Info);
 
 		assetMap.erase(_pathStr);
 	}

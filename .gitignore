@@ -446,3 +446,6 @@ FodyWeavers.xsd
 # DO NOT IGNORE ASSETS
 !assets/
 !assets/**
+
+# Explicitly ignore the 'saved' directory, as it will be for temporary (re-generated) files
+[Ss]aved/

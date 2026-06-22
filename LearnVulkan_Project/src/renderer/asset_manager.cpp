@@ -4,13 +4,21 @@
 #include "renderer/material.h"
 #include "renderer/texture.h"
 
+void AssetManager::OnInitialized() {
+	LOG_MSG("Init", LogVerbosity::Info);
+}
+
 void AssetManager::OnCleanup() {
+	mIsCleaningUp = true;
+
 	// Run 'ClearMap' for each type specified in 'AllAssetTypes'
 	std::apply([this](auto... assetTypes) {
 		(ClearMap<typename decltype(assetTypes)::type>(), ...);
 	}, AllAssetTypes{});
 
 	mStableIdToAsset.clear();
+
+	LOG_MSG("Cleanup", LogVerbosity::Info);
 }
 
 std::string AssetManager::StripFirstFolder(const std::filesystem::path& _path) {

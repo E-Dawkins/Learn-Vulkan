@@ -11,6 +11,7 @@
 #include "renderer/texture.h"
 #include "renderer/asset_manager.h"
 #include "utils/buffer_utils.h"
+#include "utils/debug_logger.h"
 #include "utils/image_utils.h"
 #include "utils/vulkan_ext_funcs.h"
 
@@ -206,6 +207,8 @@ void App::InitVulkan() {
 }
 
 void App::CreateInstance() {
+	LOG_MSG("Creating Vulkan instance", LogVerbosity::Info);
+
 	// First thing's first, check for validation layer support
 	if (gEnableValidationLayers && !CheckValidationLayerSupport()) {
 		throw std::runtime_error("Validation layers requested, but not available!");
@@ -376,6 +379,8 @@ VkSampleCountFlagBits App::GetMaxUsableSampleCount() const {
 }
 
 void App::PickPhysicalDevice() {
+	LOG_MSG("Finding suitable physical device", LogVerbosity::Info);
+
 	uint32_t deviceCount = 0;
 	vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
 
@@ -470,6 +475,8 @@ QueueFamilyIndices App::FindQueueFamilies(VkPhysicalDevice _device) const {
 }
 
 void App::CreateLogicalDevice() {
+	LOG_MSG("Creating logical device", LogVerbosity::Info);
+
 	QueueFamilyIndices indices = FindQueueFamilies(mPhysicalDevice);
 
 	// Set priority of queue, this influences the scheduling of
@@ -631,6 +638,8 @@ VkExtent2D App::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& _capabilities) 
 }
 
 void App::CreateSwapChain() {
+	LOG_MSG("Creating swapchain", LogVerbosity::Info);
+
 	SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(mPhysicalDevice);
 	
 	VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
@@ -810,6 +819,8 @@ void App::CreateRenderPass() {
 }
 
 void App::CreateFramebuffers() {
+	LOG_MSG("Creating frame buffers", LogVerbosity::Info);
+
 	mSwapChainFramebuffers.resize(mSwapChainImageViews.size());
 
 	for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
@@ -936,6 +947,8 @@ void App::CreateUniformBuffers() {
 }
 
 void App::CreateDescriptorPools() {
+	LOG_MSG("Creating descriptor pools", LogVerbosity::Info);
+
 	// ----- Frame descriptor pool -----
 	// What type of descriptors our sets will contain, and how many
 	VkDescriptorPoolSize framePoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(gMaxFramesInFlight) };
@@ -977,6 +990,8 @@ void App::CreateDescriptorPools() {
 }
 
 void App::CreateFrameDescriptorSets() {
+	LOG_MSG("Creating frame descriptor sets", LogVerbosity::Info);
+
 	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Global);
 	std::vector<VkDescriptorSetLayout> layouts(gMaxFramesInFlight, layoutPreset);
 
@@ -1033,6 +1048,8 @@ void App::CreateMaterialBuffers() {
 }
 
 void App::CreateMaterialDescriptorSet() {
+	LOG_MSG("Creating material descriptor sets", LogVerbosity::Info);
+
 	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Material);
 
 	VkDescriptorSetAllocateInfo allocInfo{
@@ -1367,6 +1384,8 @@ void App::CreateSyncObjects() {
 }
 
 void App::RecreateSwapChain() {
+	LOG_MSG("Re-creating swapchain", LogVerbosity::Info);
+
 	// If GLFW window is minimized, the framebuffer has size 0,
 	// for now we just pause rendering until the size is non-zero
 	int width = 0, height = 0;
@@ -1387,6 +1406,8 @@ void App::RecreateSwapChain() {
 }
 
 void App::CleanupSwapChain() {
+	LOG_MSG("Cleaning up swapchain", LogVerbosity::Info);
+
 	vkDestroyImageView(mLogicalDevice, mColorImageView, nullptr);
 	vkDestroyImage(mLogicalDevice, mColorImage, nullptr);
 	vkFreeMemory(mLogicalDevice, mColorImageMemory, nullptr);
@@ -1553,6 +1574,10 @@ void App::UpdateUniformBuffer(uint32_t _currentImage) {
 	memcpy(mUniformBuffersMapped[_currentImage], &ubo, sizeof(ubo));
 }
 
+void App::OnInitialized() {
+	LOG_MSG("Init", LogVerbosity::Info);
+}
+
 void App::OnCleanup() {
 	// Ensure everything has finished. This is only really necessary if the
 	// program is ended via a thrown exception, main loop exit does this already
@@ -1562,10 +1587,6 @@ void App::OnCleanup() {
 	}
 
 	CleanupSwapChain();
-
-	for (auto& [slot, texSampler] : mTextureSlotToSampler) {
-		vkDestroySampler(mLogicalDevice, texSampler, nullptr);
-	}
 
 	AssetManager::Shutdown();
 
@@ -1611,4 +1632,6 @@ void App::OnCleanup() {
 
 	glfwDestroyWindow(mWindow);
 	glfwTerminate();
+
+	LOG_MSG("Cleanup", LogVerbosity::Info);
 }

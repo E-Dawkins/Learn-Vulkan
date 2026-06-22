@@ -199,5 +199,8 @@ private:
 	void MainLoop();
 	void DrawFrame();
 	void UpdateUniformBuffer(uint32_t _currentImage);
+
+private:
+	void OnInitialized() override;
 	void OnCleanup() override;
 };
