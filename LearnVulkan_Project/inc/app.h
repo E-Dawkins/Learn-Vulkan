@@ -12,6 +12,7 @@
 #include <optional>
 #include <vector>
 
+#include "renderer/camera.h"
 #include "utils/type_defs.h"
 
 class Material;
@@ -33,12 +34,6 @@ struct SwapChainSupportDetails
 	VkSurfaceCapabilitiesKHR capabilities = {};
 	std::vector<VkSurfaceFormatKHR> formats;
 	std::vector<VkPresentModeKHR> presentModes;
-};
-
-struct CameraData
-{
-	alignas(16) glm::mat4 view;
-	alignas(16) glm::mat4 proj;
 };
 
 struct MultisampleState
@@ -125,9 +120,9 @@ private:
 	VkImageView mColorImageView;
 
 	std::weak_ptr<Mesh> mTempMesh;
+	std::unique_ptr<FlyCamera> mCamera;
 
-public:
-	bool framebufferResized = false;
+	bool mFramebufferResized = false;
 
 public:
 	void Run();
@@ -145,6 +140,11 @@ public:
 
 private:
 	void InitWindow();
+
+	void ProcessMouseMovement(const glm::vec2& _deltaPos);
+	void ProcessMouseScroll(const glm::vec2& _scrollDelta);
+	void ProcessMouseInput(int _button, int _action);
+	void ProcessKeyInput(int _key, int _action);
 
 	void InitVulkan();
 	void CreateInstance();
@@ -196,9 +196,10 @@ private:
 	void RecreateSwapChain();
 	void CleanupSwapChain();
 
+	void Start();
 	void MainLoop();
-	void DrawFrame();
-	void UpdateUniformBuffer(uint32_t _currentImage);
+	void DrawFrame(float _deltaTime);
+	void UpdateUniformBuffer(uint32_t _currentImage, float _deltaTime);
 
 private:
 	void OnInitialized() override;

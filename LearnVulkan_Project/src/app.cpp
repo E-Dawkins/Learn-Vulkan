@@ -93,11 +93,74 @@ void Ssbo::WriteToDescriptorSet(const VkDescriptorSet& _set, uint32_t _binding) 
 	);
 }
 
-static void FramebufferResizeCallback(GLFWwindow* /*_window*/, int /*_width*/, int /*_height*/) {
-	App::GetInstance().framebufferResized = true;
+void App::Run() {
+	InitWindow();
+	InitVulkan();
+
+	Start();
+	MainLoop();
 }
 
-static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _action, int /*_mods*/) {
+void App::InitWindow() {
+	glfwInit();
+
+	// Since GLFW was designed to create an OpenGL context,
+	// we need to tell it to *not* create one
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+
+	// Resizing requires special care, so disable it for now
+	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+	// 1,2,3 params are window width, height and title
+	// 4th param => specifies which monitor to open window on
+	// 5th param => specific to OpenGL
+	mWindow = glfwCreateWindow(gWidth, gHeight, "Learn Vulkan", nullptr, nullptr);
+
+	// Since these lambdas are defined within 'App', they can
+	// access private variables / functions... very nice :)
+	{
+		glfwSetFramebufferSizeCallback(mWindow, [](GLFWwindow*, int, int) {
+			App::GetInstance().mFramebufferResized = false;
+		});
+
+		glfwSetMouseButtonCallback(mWindow, [](GLFWwindow*, int _button, int _action, int) {
+			App::GetInstance().ProcessMouseInput(_button, _action);
+		});
+
+		glfwSetKeyCallback(mWindow, [](GLFWwindow*, int _key, int, int _action, int) {
+			App::GetInstance().ProcessKeyInput(_key, _action);
+		});
+
+		glfwSetCursorPosCallback(mWindow, [](GLFWwindow*, double _xPos, double _yPos) {
+			static glm::vec2 lastCursorPos{ _xPos, _yPos };
+			const glm::vec2 currentCursorPos{ _xPos, _yPos };
+
+			// Subtraction is flipped as we must negate both axes for it to be sensible to use
+			App::GetInstance().ProcessMouseMovement(lastCursorPos - currentCursorPos);
+
+			lastCursorPos = { _xPos, _yPos };
+		});
+
+		glfwSetScrollCallback(mWindow, [](GLFWwindow*, double _xDelta, double _yDelta) {
+			// Horizontal scroll is very rare, but we pass it through just in case
+			App::GetInstance().ProcessMouseScroll({ _xDelta, _yDelta });
+		});
+	}
+}
+
+void App::ProcessMouseMovement(const glm::vec2& _deltaPos) {
+	// Only allow look input if cursor is locked to window
+	if (glfwGetInputMode(mWindow, GLFW_CURSOR) != GLFW_CURSOR_NORMAL) {
+		mCamera->AddLookInput(1.f, _deltaPos);
+	}
+}
+
+void App::ProcessMouseScroll(const glm::vec2& _scrollDelta) {
+	float flySpeed = (mCamera->flySpeed + (_scrollDelta.y * 0.5f));
+	mCamera->flySpeed = glm::clamp(flySpeed, 0.5f, 5.f);
+}
+
+void App::ProcessMouseInput(int _button, int _action) {
 	auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").lock();
 	if (!testMaterial) {
 		std::cout << "MouseButtonCallback: 'testMaterial' is invalid!\n";
@@ -134,28 +197,34 @@ static void MouseButtonCallback(GLFWwindow* /*_window*/, int _button, int _actio
 	}
 }
 
-void App::Run() {
-	InitWindow();
-	InitVulkan();
-	MainLoop();
-}
+void App::ProcessKeyInput(int _key, int _action) {
+	// Camera move
+	{
+		float upInput = (float)(_key == GLFW_KEY_SPACE) - (float)(_key == GLFW_KEY_LEFT_CONTROL);
+		mCamera->AddMoveInput(upInput, gWorldUp);
 
-void App::InitWindow() {
-	glfwInit();
+		float forwardInput = (float)(_key == GLFW_KEY_W) - (float)(_key == GLFW_KEY_S);
+		mCamera->AddMoveInput(forwardInput, mCamera->transform.GetForwardVector());
 
-	// Since GLFW was designed to create an OpenGL context,
-	// we need to tell it to *not* create one
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		float rightInput = (float)(_key == GLFW_KEY_D) - (float)(_key == GLFW_KEY_A);
+		mCamera->AddMoveInput(rightInput, mCamera->transform.GetRightVector());
+	}
 
-	// Resizing requires special care, so disable it for now
-	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	// Camera look
+	{
+		if (_key == GLFW_KEY_L && _action == GLFW_PRESS) {
+			glfwSetInputMode(mWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		}
 
-	// 1,2,3 params are window width, height and title
-	// 4th param => specifies which monitor to open window on
-	// 5th param => specific to OpenGL
-	mWindow = glfwCreateWindow(gWidth, gHeight, "Learn Vulkan", nullptr, nullptr);
-	glfwSetFramebufferSizeCallback(mWindow, FramebufferResizeCallback);
-	glfwSetMouseButtonCallback(mWindow, MouseButtonCallback);
+		if (_key == GLFW_KEY_U && _action == GLFW_PRESS) {
+			glfwSetInputMode(mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		}
+
+		// Point camera at origin
+		if (_key == GLFW_KEY_R && _action == GLFW_PRESS) {
+			mCamera->transform.LookAt({ 0, 0, 0 }, true);
+		}
+	}
 }
 
 void App::InitVulkan() {
@@ -1427,17 +1496,42 @@ void App::CleanupSwapChain() {
 	vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
 }
 
+void App::Start() {
+	mCamera = std::make_unique<FlyCamera>(
+		45.f,			// fov
+		0.1f, 10.f,		// near-far clip
+		3.f,			// fly speed
+		1.5f			// look speed
+	);
+	mCamera->SetViewSize({ mSwapChainExtent.width, mSwapChainExtent.height });
+	mCamera->transform.SetPosition({ 3, 3, 3 });
+	mCamera->transform.LookAt({ 0, 0, 0 });
+}
+
 void App::MainLoop() {
+	float deltaTime = 0.f;
+
 	while (!glfwWindowShouldClose(mWindow)) {
-		glfwPollEvents();
-		DrawFrame();
+		auto frameStart = std::chrono::high_resolution_clock::now();
+
+		// Core app loop
+		{
+			glfwPollEvents();
+
+			mCamera->Update(deltaTime);
+
+			DrawFrame(deltaTime);
+		}
+
+		auto frameEnd = std::chrono::high_resolution_clock::now();
+		deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(frameEnd - frameStart).count();
 	}
 
 	// Wait for the logical device to finish operations
 	vkDeviceWaitIdle(mLogicalDevice);
 }
 
-void App::DrawFrame() {
+void App::DrawFrame(float _deltaTime) {
 	// Wait for all fences in an array, for uint64_t::max timeout
 	vkWaitForFences(mLogicalDevice, 1, &mInFlightFences[mCurrentFrame], VK_TRUE, UINT64_MAX);
 
@@ -1458,7 +1552,7 @@ void App::DrawFrame() {
 	// Manually reset our fences, only if we are submitting work
 	vkResetFences(mLogicalDevice, 1, &mInFlightFences[mCurrentFrame]);
 
-	UpdateUniformBuffer(mCurrentFrame);
+	UpdateUniformBuffer(mCurrentFrame, _deltaTime);
 
 	// Reset + record our command buffer
 	vkResetCommandBuffer(mCommandBuffers[mCurrentFrame], 0);
@@ -1524,9 +1618,12 @@ void App::DrawFrame() {
 	result = vkQueuePresentKHR(mPresentQueue, &presentInfo);
 
 	// Check if swapchain needs to be recreated or if presenting failed
-	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
-		framebufferResized = false;
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || mFramebufferResized) {
+		mFramebufferResized = false;
 		RecreateSwapChain();
+
+		// Update camera view size if frame buffer is resized
+		mCamera->SetViewSize({ mSwapChainExtent.width, mSwapChainExtent.height });
 	}
 	else if (result != VK_SUCCESS) {
 		throw std::runtime_error("Failed to present swap chain image!");
@@ -1536,42 +1633,20 @@ void App::DrawFrame() {
 	mCurrentFrame = (mCurrentFrame + 1) % gMaxFramesInFlight;
 }
 
-void App::UpdateUniformBuffer(uint32_t _currentImage) {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-	startTime = currentTime; // required to make 'deltaTime' actually 'delta'
-
+void App::UpdateUniformBuffer(uint32_t _currentImage, float _deltaTime) {
 	// TODO - move this somewhere else now that mesh has its' own transform (matrix)
 	if (auto lockedMesh = mTempMesh.lock()) {
 		lockedMesh->transform.AddRotation(glm::angleAxis(
-			deltaTime * glm::radians(90.f),	// rotation (in radians)
-			glm::vec3(0.f, 0.f, 1.f)		// axis of rotation
+			_deltaTime * glm::radians(90.f),	// rotation (in radians)
+			gWorldUp							// axis of rotation
 		));
 	}
 
-	CameraData ubo = {};
-	ubo.view = glm::lookAt(
-		glm::vec3(2.f),				// camera position
-		glm::vec3(0.f),				// position to look at
-		glm::vec3(0.f, 0.f, 1.f)	// up axis
-	);
-
-	float aspectRatio = mSwapChainExtent.width / (float)(mSwapChainExtent.height);
-	ubo.proj = glm::perspective(
-		glm::radians(45.f),		// fov
-		aspectRatio,
-		0.1f,					// near clip
-		10.f					// far clip plane
-	);
-
-	// Account for OpenGL flipped y coordinate, if you
-	// don't do this, the image is rendered upside down
-	ubo.proj[1][1] *= -1;
+	assert(mCamera);
 
 	// Copy ubo directly into already mapped buffer
-	memcpy(mUniformBuffersMapped[_currentImage], &ubo, sizeof(ubo));
+	const CameraData& camData = mCamera->GetGraphicsData();
+	memcpy(mUniformBuffersMapped[_currentImage], &camData, sizeof(CameraData));
 }
 
 void App::OnInitialized() {
