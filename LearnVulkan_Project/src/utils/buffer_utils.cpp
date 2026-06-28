@@ -65,3 +65,59 @@ void Utils::BufferUtils::CopyBuffer(VkBuffer _srcBuffer, VkBuffer _dstBuffer, Vk
 
 	appInst.EndSingleTimeCommands(commandBuffer);
 }
+
+void Utils::BufferUtils::Ssbo::Init(VkDeviceSize _size) {
+	mBufferSize = _size;
+
+	Utils::BufferUtils::CreateBuffer(
+		_size,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		mBuffer,
+		mDeviceMemory
+	);
+
+	void* mapping = nullptr;
+	vkMapMemory(App::GetInstance().GetLogicalDevice(), mDeviceMemory, 0, VK_WHOLE_SIZE, 0, &mapping);
+	mPersistentMapping = mapping;
+}
+
+void Utils::BufferUtils::Ssbo::Reset() {
+	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
+
+	vkUnmapMemory(logicalDevice, mDeviceMemory);
+	mPersistentMapping = nullptr;
+
+	vkDestroyBuffer(logicalDevice, mBuffer, nullptr);
+	vkFreeMemory(logicalDevice, mDeviceMemory, nullptr);
+
+}
+
+void Utils::BufferUtils::Ssbo::WriteToDescriptorSet(const VkDescriptorSet& _set, uint32_t _binding) {
+	VkDescriptorBufferInfo bufferInfo{
+		.buffer = mBuffer,
+		.offset = 0,
+		.range = mBufferSize
+	};
+
+	VkWriteDescriptorSet descriptorWrite{
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = _set,
+		.dstBinding = _binding,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.pBufferInfo = &bufferInfo
+	};
+
+	vkUpdateDescriptorSets(
+		App::GetInstance().GetLogicalDevice(),
+
+		// Write array
+		1,
+		&descriptorWrite,
+
+		// Copy array
+		0,
+		nullptr
+	);
+}

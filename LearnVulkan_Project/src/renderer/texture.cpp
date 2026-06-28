@@ -201,3 +201,31 @@ void Texture::GenerateMipMaps(VkFormat _imageFormat, int32_t _texWidth, int32_t 
 
 	App::GetInstance().EndSingleTimeCommands(commandBuffer);
 }
+
+void RuntimeTexture::CreateImage(VkExtent2D _extent, VkSampleCountFlagBits _numSamples, VkFormat _format, VkImageUsageFlags _usage, VkImageAspectFlags _aspectFlags) {
+	// For now, all runtime textures have no mip levels
+	constexpr uint32_t mipLevels = 1;
+
+	Utils::ImageUtils::CreateImage(
+		_extent.width,
+		_extent.height,
+		mipLevels,
+		_numSamples,
+		_format,
+		VK_IMAGE_TILING_OPTIMAL,
+		_usage,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		mImage,
+		mImageMemory
+	);
+
+	mImageView = Utils::ImageUtils::CreateImageView(mImage, _format, _aspectFlags, mipLevels);
+}
+
+void RuntimeTexture::CleanupImage() const {
+	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
+
+	vkDestroyImageView(logicalDevice, mImageView, nullptr);
+	vkDestroyImage(logicalDevice, mImage, nullptr);
+	vkFreeMemory(logicalDevice, mImageMemory, nullptr);
+}

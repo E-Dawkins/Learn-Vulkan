@@ -20,3 +20,17 @@ private:
 	void CreateTextureImage(const std::filesystem::path& _filePath);
 	void GenerateMipMaps(VkFormat _imageFormat, int32_t _texWidth, int32_t _texHeight) const;
 };
+
+class RuntimeTexture
+{
+private:
+	VkImage mImage;
+	VkDeviceMemory mImageMemory;
+	VkImageView mImageView;
+
+public:
+	inline const VkImageView& GetImageView() { return mImageView; }
+
+	void CreateImage(VkExtent2D _extent, VkSampleCountFlagBits _numSamples, VkFormat _format, VkImageUsageFlags _usage, VkImageAspectFlags _aspectFlags);
+	void CleanupImage() const;
+};

@@ -13,11 +13,12 @@
 #include <vector>
 
 #include "renderer/camera.h"
+#include "renderer/texture.h"
+#include "utils/buffer_utils.h"
 #include "utils/type_defs.h"
 
 class Material;
 class Mesh;
-class Texture;
 
 struct QueueFamilyIndices
 {
@@ -41,31 +42,6 @@ struct MultisampleState
 	VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
 	VkBool32 sampleShadingEnabled = VK_FALSE;
 	float minSampleShading = 1.f;
-};
-
-struct Ssbo
-{
-private:
-	VkBuffer mBuffer;
-	VkDeviceMemory mDeviceMemory;
-	VkDeviceSize mBufferSize;
-	void* mPersistentMapping; // points to GPU-side memory
-
-public:
-	void Init(VkDeviceSize _size);
-	void Reset();
-	void WriteToDescriptorSet(const VkDescriptorSet& _set, uint32_t _binding);
-
-	template<typename T>
-	const size_t Size() const {
-		return mBufferSize / sizeof(T);
-	}
-
-	template<typename T>
-	T& GetElement(size_t _index) const {
-		assert(_index < Size<T>());
-		return reinterpret_cast<T*>(mPersistentMapping)[_index];
-	}
 };
 
 class App : public ISingleton<App>
@@ -99,9 +75,9 @@ private:
 	VkDescriptorPool mMaterialDescriptorPool;
 	VkDescriptorSet mMaterialDescriptorSet;
 	std::unordered_map<AssetDefs::TextureSlot, VkSampler> mTextureSlotToSampler;
-	Ssbo mDenseIdToTextureSlot;
-	Ssbo mMaterialParamsBuffer;
-	Ssbo mDenseIdToMaterialSlot;
+	Utils::BufferUtils::Ssbo mDenseIdToTextureSlot;
+	Utils::BufferUtils::Ssbo mMaterialParamsBuffer;
+	Utils::BufferUtils::Ssbo mDenseIdToMaterialSlot;
 
 	std::vector<VkCommandBuffer> mCommandBuffers;
 	std::vector<VkSemaphore> mImageAvailableSemaphores; // signal that an image has been acquired
@@ -109,15 +85,9 @@ private:
 	std::vector<VkFence> mInFlightFences; // make sure only one frame is rendering at a time
 	uint32_t mCurrentFrame = 0;
 
-	VkImage mDepthImage;
-	VkDeviceMemory mDepthImageMemory;
-	VkImageView mDepthImageView;
-
 	MultisampleState mMsaaState;
-
-	VkImage mColorImage;
-	VkDeviceMemory mColorImageMemory;
-	VkImageView mColorImageView;
+	RuntimeTexture mDepthTexture;
+	RuntimeTexture mColorTexture;
 
 	std::weak_ptr<Mesh> mTempMesh;
 	std::unique_ptr<FlyCamera> mCamera;
@@ -172,7 +142,6 @@ private:
 	VkFormat FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkImageTiling _tiling, VkFormatFeatureFlags _features) const;
 	void CreateColorResources();
 	VkFormat FindDepthFormat();
-	bool HasStencilComponent(VkFormat _format);
 	void CreateDepthResources();
 
 	void CreateUniformBuffers();

@@ -10,7 +10,6 @@
 #include "renderer/shader.h"
 #include "renderer/texture.h"
 #include "renderer/asset_manager.h"
-#include "utils/buffer_utils.h"
 #include "utils/debug_logger.h"
 #include "utils/image_utils.h"
 #include "utils/vulkan_ext_funcs.h"
@@ -36,62 +35,6 @@ const bool gEnableValidationLayers = false;
 #else
 const bool gEnableValidationLayers = true;
 #endif
-
-void Ssbo::Init(VkDeviceSize _size) {
-	mBufferSize = _size;
-
-	Utils::BufferUtils::CreateBuffer(
-		_size,
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		mBuffer,
-		mDeviceMemory
-	);
-
-	void* mapping = nullptr;
-	vkMapMemory(App::GetInstance().GetLogicalDevice(), mDeviceMemory, 0, VK_WHOLE_SIZE, 0, &mapping);
-	mPersistentMapping = mapping;
-}
-
-void Ssbo::Reset() {
-	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
-
-	vkUnmapMemory(logicalDevice, mDeviceMemory);
-	mPersistentMapping = nullptr;
-
-	vkDestroyBuffer(logicalDevice, mBuffer, nullptr);
-	vkFreeMemory(logicalDevice, mDeviceMemory, nullptr);
-
-}
-
-void Ssbo::WriteToDescriptorSet(const VkDescriptorSet& _set, uint32_t _binding) {
-	VkDescriptorBufferInfo bufferInfo{
-		.buffer = mBuffer,
-		.offset = 0,
-		.range = mBufferSize
-	};
-
-	VkWriteDescriptorSet descriptorWrite{
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = _set,
-		.dstBinding = _binding,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.pBufferInfo = &bufferInfo
-	};
-
-	vkUpdateDescriptorSets(
-		App::GetInstance().GetLogicalDevice(),
-
-		// Write array
-		1,
-		&descriptorWrite,
-
-		// Copy array
-		0,
-		nullptr
-	);
-}
 
 void App::Run() {
 	InitWindow();
@@ -894,8 +837,8 @@ void App::CreateFramebuffers() {
 
 	for (size_t i = 0; i < mSwapChainImageViews.size(); i++) {
 		std::array<VkImageView, 3> attachments = {
-			mColorImageView,
-			mDepthImageView,
+			mColorTexture.GetImageView(),
+			mDepthTexture.GetImageView(),
 			mSwapChainImageViews[i]
 		};
 
@@ -946,22 +889,13 @@ VkFormat App::FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkIm
 }
 
 void App::CreateColorResources() {
-	VkFormat colorFormat = mSwapChainImageFormat;
-
-	Utils::ImageUtils::CreateImage(
-		mSwapChainExtent.width,
-		mSwapChainExtent.height,
-		1,
+	mColorTexture.CreateImage(
+		mSwapChainExtent,
 		mMsaaState.samples,
-		colorFormat,
-		VK_IMAGE_TILING_OPTIMAL,
+		mSwapChainImageFormat,
 		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		mColorImage,
-		mColorImageMemory
+		VK_IMAGE_ASPECT_COLOR_BIT
 	);
-
-	mColorImageView = Utils::ImageUtils::CreateImageView(mColorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
 VkFormat App::FindDepthFormat() {
@@ -972,27 +906,14 @@ VkFormat App::FindDepthFormat() {
 	);
 }
 
-bool App::HasStencilComponent(VkFormat _format) {
-	return _format == VK_FORMAT_D32_SFLOAT_S8_UINT || _format == VK_FORMAT_D24_UNORM_S8_UINT;
-}
-
 void App::CreateDepthResources() {
-	VkFormat depthFormat = FindDepthFormat();
-
-	Utils::ImageUtils::CreateImage(
-		mSwapChainExtent.width,
-		mSwapChainExtent.height,
-		1,
+	mDepthTexture.CreateImage(
+		mSwapChainExtent,
 		mMsaaState.samples,
-		depthFormat,
-		VK_IMAGE_TILING_OPTIMAL,
+		FindDepthFormat(),
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		mDepthImage,
-		mDepthImageMemory
+		VK_IMAGE_ASPECT_DEPTH_BIT
 	);
-
-	mDepthImageView = Utils::ImageUtils::CreateImageView(mDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
 void App::CreateUniformBuffers() {
@@ -1477,13 +1398,8 @@ void App::RecreateSwapChain() {
 void App::CleanupSwapChain() {
 	LOG_MSG("Cleaning up swapchain", LogVerbosity::Info);
 
-	vkDestroyImageView(mLogicalDevice, mColorImageView, nullptr);
-	vkDestroyImage(mLogicalDevice, mColorImage, nullptr);
-	vkFreeMemory(mLogicalDevice, mColorImageMemory, nullptr);
-
-	vkDestroyImageView(mLogicalDevice, mDepthImageView, nullptr);
-	vkDestroyImage(mLogicalDevice, mDepthImage, nullptr);
-	vkFreeMemory(mLogicalDevice, mDepthImageMemory, nullptr);
+	mColorTexture.CleanupImage();
+	mDepthTexture.CleanupImage();
 
 	for (const auto& framebuffer : mSwapChainFramebuffers) {
 		vkDestroyFramebuffer(mLogicalDevice, framebuffer, nullptr);
