@@ -11,7 +11,7 @@ protected:
 	// Protected so only the exposed singleton functions can create/destroy our instance
 	// ... but sub-classes can still override with their own constructor/destructor
 	ISingleton() = default;
-	~ISingleton() = default;
+	virtual ~ISingleton() = default;
 
 	virtual void OnInitialized() {}
 	virtual void OnCleanup() {}

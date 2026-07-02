@@ -17,8 +17,7 @@
 #include <algorithm>
 #include <chrono>
 
-const uint32_t gWidth = 800;
-const uint32_t gHeight = 600;
+const glm::ivec2 gWindowExtents{ 800, 600 };
 const int gMaxFramesInFlight = 2;
 
 const std::vector<const char*> gValidationLayers = {
@@ -45,55 +44,21 @@ void App::Run() {
 }
 
 void App::InitWindow() {
-	glfwInit();
+	mWindow = std::make_unique<Window>("Learn Vulkan", gWindowExtents);
+	assert(mWindow);
+	
+	using std::placeholders::_1, std::placeholders::_2;
 
-	// Since GLFW was designed to create an OpenGL context,
-	// we need to tell it to *not* create one
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-	// Resizing requires special care, so disable it for now
-	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-	// 1,2,3 params are window width, height and title
-	// 4th param => specifies which monitor to open window on
-	// 5th param => specific to OpenGL
-	mWindow = glfwCreateWindow(gWidth, gHeight, "Learn Vulkan", nullptr, nullptr);
-
-	// Since these lambdas are defined within 'App', they can
-	// access private variables / functions... very nice :)
-	{
-		glfwSetFramebufferSizeCallback(mWindow, [](GLFWwindow*, int, int) {
-			App::GetInstance().mFramebufferResized = false;
-		});
-
-		glfwSetMouseButtonCallback(mWindow, [](GLFWwindow*, int _button, int _action, int) {
-			App::GetInstance().ProcessMouseInput(_button, _action);
-		});
-
-		glfwSetKeyCallback(mWindow, [](GLFWwindow*, int _key, int, int _action, int) {
-			App::GetInstance().ProcessKeyInput(_key, _action);
-		});
-
-		glfwSetCursorPosCallback(mWindow, [](GLFWwindow*, double _xPos, double _yPos) {
-			static glm::vec2 lastCursorPos{ _xPos, _yPos };
-			const glm::vec2 currentCursorPos{ _xPos, _yPos };
-
-			// Subtraction is flipped as we must negate both axes for it to be sensible to use
-			App::GetInstance().ProcessMouseMovement(lastCursorPos - currentCursorPos);
-
-			lastCursorPos = { _xPos, _yPos };
-		});
-
-		glfwSetScrollCallback(mWindow, [](GLFWwindow*, double _xDelta, double _yDelta) {
-			// Horizontal scroll is very rare, but we pass it through just in case
-			App::GetInstance().ProcessMouseScroll({ _xDelta, _yDelta });
-		});
-	}
+	mWindow->onWindowResized = [](glm::vec2) { App::GetInstance().mFramebufferResized = true; };
+	mWindow->onMouseClicked = std::bind(&App::ProcessMouseInput, this, _1, _2);
+	mWindow->onMouseMoved = std::bind(&App::ProcessMouseMovement, this, _1);
+	mWindow->onMouseScrolled = std::bind(&App::ProcessMouseScroll, this, _1);
+	mWindow->onKeyInput = std::bind(&App::ProcessKeyInput, this, _1, _2);
 }
 
 void App::ProcessMouseMovement(const glm::vec2& _deltaPos) {
 	// Only allow look input if cursor is locked to window
-	if (glfwGetInputMode(mWindow, GLFW_CURSOR) != GLFW_CURSOR_NORMAL) {
+	if (mWindow->GetMouseInputMode() != GLFW_CURSOR_NORMAL) {
 		mCamera->AddLookInput(1.f, _deltaPos);
 	}
 }
@@ -156,11 +121,12 @@ void App::ProcessKeyInput(int _key, int _action) {
 	// Camera look
 	{
 		if (_key == GLFW_KEY_L && _action == GLFW_PRESS) {
-			glfwSetInputMode(mWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			mWindow->SetMouseInputMode(GLFW_CURSOR_DISABLED);
 		}
 
 		if (_key == GLFW_KEY_U && _action == GLFW_PRESS) {
-			glfwSetInputMode(mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+			mWindow->SetMouseInputMode(GLFW_CURSOR_NORMAL);
+
 		}
 
 		// Point camera at origin
@@ -173,7 +139,9 @@ void App::ProcessKeyInput(int _key, int _action) {
 void App::InitVulkan() {
 	CreateInstance();
 	SetupDebugMessenger();
-	CreateWindowSurface();
+	
+	mWindow->CreateWindowSurface(mInstance);
+
 	PickPhysicalDevice();
 	CreateLogicalDevice();
 
@@ -367,12 +335,6 @@ void App::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& _
 	};
 }
 
-void App::CreateWindowSurface() {
-	if (glfwCreateWindowSurface(mInstance, mWindow, nullptr, &mWindowSurface) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create window surface!");
-	}
-}
-
 VkSampleCountFlagBits App::GetMaxUsableSampleCount() const {
 	VkPhysicalDeviceProperties physicalDeviceProperties = {};
 	vkGetPhysicalDeviceProperties(mPhysicalDevice, &physicalDeviceProperties);
@@ -469,7 +431,7 @@ QueueFamilyIndices App::FindQueueFamilies(VkPhysicalDevice _device) const {
 		}
 
 		VkBool32 presentSupport = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(_device, i, mWindowSurface, &presentSupport);
+		vkGetPhysicalDeviceSurfaceSupportKHR(_device, i, mWindow->GetWindowSurface(), &presentSupport);
 
 		if (presentSupport) {
 			indices.presentFamily = i;
@@ -577,22 +539,22 @@ void App::CreateLogicalDevice() {
 SwapChainSupportDetails App::QuerySwapChainSupport(VkPhysicalDevice _device) const {
 	SwapChainSupportDetails details;
 
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_device, mWindowSurface, &details.capabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_device, mWindow->GetWindowSurface(), &details.capabilities);
 	
 	uint32_t formatCount = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(_device, mWindowSurface, &formatCount, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(_device, mWindow->GetWindowSurface(), &formatCount, nullptr);
 
 	if (formatCount != 0) {
 		details.formats.resize(formatCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(_device, mWindowSurface, &formatCount, details.formats.data());
+		vkGetPhysicalDeviceSurfaceFormatsKHR(_device, mWindow->GetWindowSurface(), &formatCount, details.formats.data());
 	}
 
 	uint32_t presentModeCount = 0;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(_device, mWindowSurface, &presentModeCount, nullptr);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(_device, mWindow->GetWindowSurface(), &presentModeCount, nullptr);
 
 	if (presentModeCount != 0) {
 		details.presentModes.resize(presentModeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(_device, mWindowSurface, &presentModeCount, details.presentModes.data());
+		vkGetPhysicalDeviceSurfacePresentModesKHR(_device, mWindow->GetWindowSurface(), &presentModeCount, details.presentModes.data());
 	}
 
 	return details;
@@ -627,25 +589,12 @@ VkExtent2D App::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& _capabilities) 
 		return _capabilities.currentExtent;
 	}
 	else {
-		int width = 0, height = 0;
-		glfwGetFramebufferSize(mWindow, &width, &height);
-
-		VkExtent2D actualExtent = {
-			static_cast<uint32_t>(width),
-			static_cast<uint32_t>(height),
-		};
-
-		actualExtent.width = std::clamp(actualExtent.width, 
-			_capabilities.minImageExtent.width, 
-			_capabilities.maxImageExtent.width
+		const glm::ivec2 windowExtents = glm::clamp(mWindow->GetExtents(),
+			glm::ivec2(_capabilities.minImageExtent.width, _capabilities.minImageExtent.height),
+			glm::ivec2(_capabilities.maxImageExtent.width, _capabilities.maxImageExtent.height)
 		);
 
-		actualExtent.height = std::clamp(actualExtent.height,
-			_capabilities.minImageExtent.height,
-			_capabilities.maxImageExtent.height
-		);
-
-		return actualExtent;
+		return VkExtent2D(windowExtents.x, windowExtents.y);
 	}
 }
 
@@ -670,7 +619,7 @@ void App::CreateSwapChain() {
 
 	VkSwapchainCreateInfoKHR createInfo = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-		.surface = mWindowSurface,
+		.surface = mWindow->GetWindowSurface(),
 		.minImageCount = imageCount,
 		.imageFormat = surfaceFormat.format,
 		.imageColorSpace = surfaceFormat.colorSpace,
@@ -1378,9 +1327,8 @@ void App::RecreateSwapChain() {
 
 	// If GLFW window is minimized, the framebuffer has size 0,
 	// for now we just pause rendering until the size is non-zero
-	int width = 0, height = 0;
-	while (width == 0 || height == 0) {
-		glfwGetFramebufferSize(mWindow, &width, &height);
+	const glm::ivec2& windowExtents = mWindow->GetExtents();
+	while (windowExtents.x == 0 || windowExtents.y == 0) {
 		glfwWaitEvents();
 	}
 
@@ -1427,7 +1375,7 @@ void App::Start() {
 void App::MainLoop() {
 	float deltaTime = 0.f;
 
-	while (!glfwWindowShouldClose(mWindow)) {
+	while (!mWindow->GetShouldClose()) {
 		auto frameStart = std::chrono::high_resolution_clock::now();
 
 		// Core app loop
@@ -1573,7 +1521,7 @@ void App::OnCleanup() {
 	// Ensure everything has finished. This is only really necessary if the
 	// program is ended via a thrown exception, main loop exit does this already
 	{
-		glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
+		mWindow->SetShouldClose();
 		vkDeviceWaitIdle(mLogicalDevice);
 	}
 
@@ -1617,12 +1565,6 @@ void App::OnCleanup() {
 	if (gEnableValidationLayers) {
 		Utils::VulkanExtFuncs::DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
 	}
-
-	vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
-	vkDestroyInstance(mInstance, nullptr);
-
-	glfwDestroyWindow(mWindow);
-	glfwTerminate();
 
 	LOG_MSG("Cleanup", LogVerbosity::Info);
 }

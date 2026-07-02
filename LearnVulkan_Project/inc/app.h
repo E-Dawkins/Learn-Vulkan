@@ -2,7 +2,6 @@
 #include "interfaces/singleton.h"
 
 #include <vulkan/vulkan.h>
-#include <GLFW/glfw3.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -14,6 +13,7 @@
 
 #include "renderer/camera.h"
 #include "renderer/texture.h"
+#include "renderer/window.h"
 #include "utils/buffer_utils.h"
 #include "utils/type_defs.h"
 
@@ -47,11 +47,10 @@ struct MultisampleState
 class App : public ISingleton<App>
 {
 private:
-	GLFWwindow* mWindow = nullptr;
+	std::unique_ptr<Window> mWindow;
 
 	VkInstance mInstance;
 	VkDebugUtilsMessengerEXT mDebugMessenger;
-	VkSurfaceKHR mWindowSurface;
 	VkPhysicalDevice mPhysicalDevice = VK_NULL_HANDLE;
 	VkDevice mLogicalDevice;
 	VkQueue mGraphicsQueue;
@@ -97,6 +96,7 @@ private:
 public:
 	void Run();
 
+	inline const VkInstance& GetVulkanInstance() const { return mInstance; }
 	inline const VkPhysicalDevice& GetPhysicalDevice() const { return mPhysicalDevice; }
 	inline const VkDevice& GetLogicalDevice() const { return mLogicalDevice; }
 	inline const MultisampleState& GetMsaaState() const { return mMsaaState; }
@@ -123,7 +123,6 @@ private:
 	bool CheckValidationLayerSupport();
 	void SetupDebugMessenger();
 	void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& _createInfo);
-	void CreateWindowSurface();
 	VkSampleCountFlagBits GetMaxUsableSampleCount() const;
 	void PickPhysicalDevice();
 	bool IsDeviceSuitable(VkPhysicalDevice _device);
