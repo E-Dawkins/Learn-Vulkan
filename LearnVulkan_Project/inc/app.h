@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "renderer/camera.h"
+#include "renderer/swapchain.h"
 #include "renderer/texture.h"
 #include "renderer/window.h"
 #include "utils/buffer_utils.h"
@@ -30,13 +31,6 @@ struct QueueFamilyIndices
 	}
 };
 
-struct SwapChainSupportDetails
-{
-	VkSurfaceCapabilitiesKHR capabilities = {};
-	std::vector<VkSurfaceFormatKHR> formats;
-	std::vector<VkPresentModeKHR> presentModes;
-};
-
 struct MultisampleState
 {
 	VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
@@ -48,6 +42,7 @@ class App : public ISingleton<App>
 {
 private:
 	std::unique_ptr<Window> mWindow;
+	std::unique_ptr<Swapchain> mSwapchain;
 
 	VkInstance mInstance;
 	VkDebugUtilsMessengerEXT mDebugMessenger;
@@ -55,12 +50,6 @@ private:
 	VkDevice mLogicalDevice;
 	VkQueue mGraphicsQueue;
 	VkQueue mPresentQueue;
-	VkSwapchainKHR mSwapChain;
-	std::vector<VkImage> mSwapChainImages;
-	VkFormat mSwapChainImageFormat;
-	VkExtent2D mSwapChainExtent;
-	std::vector<VkImageView> mSwapChainImageViews;
-	std::vector<VkFramebuffer> mSwapChainFramebuffers;
 	std::vector<VkRenderPass> mRenderPasses;
 	VkCommandPool mCommandPool;
 
@@ -80,7 +69,6 @@ private:
 
 	std::vector<VkCommandBuffer> mCommandBuffers;
 	std::vector<VkSemaphore> mImageAvailableSemaphores; // signal that an image has been acquired
-	std::vector<VkSemaphore> mRenderFinishedSemaphores; // signal that rendering has finished
 	std::vector<VkFence> mInFlightFences; // make sure only one frame is rendering at a time
 	uint32_t mCurrentFrame = 0;
 
@@ -104,9 +92,13 @@ public:
 		assert(_index < mRenderPasses.size());
 		return mRenderPasses[_index];
 	}
+	inline const Window& GetWindow() const { return *mWindow; }
 
 	VkCommandBuffer BeginSingleTimeCommands() const;
 	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;
+
+	// Calls 'FindQueueFamilies' with current physical device
+	inline QueueFamilyIndices FindCurrentQueueFamilies() const { return FindQueueFamilies(mPhysicalDevice); }
 
 private:
 	void InitWindow();
@@ -129,14 +121,7 @@ private:
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice _device);
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice _device) const;
 	void CreateLogicalDevice();
-	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice _device) const;
-	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& _availableFormats);
-	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& _availablePresentModes);
-	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& _capabilities);
-	void CreateSwapChain();
-	void CreateImageViews();
 	void CreateRenderPass();
-	void CreateFramebuffers();
 	void CreateCommandPool();
 	VkFormat FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkImageTiling _tiling, VkFormatFeatureFlags _features) const;
 	void CreateColorResources();
@@ -161,8 +146,8 @@ private:
 	void CreateCommandBuffers();
 	void RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) const;
 	void CreateSyncObjects();
-	void RecreateSwapChain();
-	void CleanupSwapChain();
+	void RecreateSwapchain();
+	void CleanupSwapchain(bool _isFinalCleanup = false);
 
 	void Start();
 	void MainLoop();
