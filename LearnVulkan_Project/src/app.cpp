@@ -18,7 +18,7 @@
 #include <chrono>
 
 const glm::ivec2 gWindowExtents{ 800, 600 };
-const int gMaxFramesInFlight = 2;
+const int8_t gMaxFramesInFlight = 2;
 
 const std::vector<const char*> gValidationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -47,7 +47,7 @@ void App::InitWindow() {
 	mWindow = std::make_unique<Window>("Learn Vulkan", gWindowExtents);
 	assert(mWindow);
 	
-	using std::placeholders::_1, std::placeholders::_2;
+	using namespace std::placeholders;
 
 	mWindow->onWindowResized = [](glm::vec2) { App::GetInstance().mFramebufferResized = true; };
 	mWindow->onMouseClicked = std::bind(&App::ProcessMouseInput, this, _1, _2);
@@ -162,23 +162,26 @@ void App::InitVulkan() {
 	mSwapchain->CreateSyncObjects();
 
 	CreateCommandPool();
-	CreateUniformBuffers();
 
-	CreateDescriptorPools();
-	CreateFrameDescriptorSets();
-	CreateMaterialBuffers();
-	CreateMaterialDescriptorSet();
+	// Init per-frame data
+	mFrameData.resize(gMaxFramesInFlight);
+	for (FrameData& frame : mFrameData) {
+		frame.Init(mLogicalDevice, mCommandPool);
+	}
 
-	CreateCommandBuffers();
-	CreateSyncObjects();
+	// Init bindless material system data
+	CreateMaterialDescriptorPool();
+	mMaterialData.Init(mLogicalDevice, mMaterialDescriptorPool);
 
 	// Create/load all our textures
 	// IT DOES NOT MATTER THE LOAD ORDER ANYMORE, THE STABLE ID => DENSE ID WORKS! :)
+	using namespace std::placeholders;
+
 	AssetManager::Init();
-	AssetManager::GetInstance().GetLoadCallback<Texture>() = std::bind(&App::OnTextureLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-	AssetManager::GetInstance().GetUnloadCallback<Texture>() = std::bind(&App::OnTextureUnloaded, this, std::placeholders::_1);
-	AssetManager::GetInstance().GetLoadCallback<Material>() = std::bind(&App::OnMaterialLoaded, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-	AssetManager::GetInstance().GetUnloadCallback<Material>() = std::bind(&App::OnMaterialUnloaded, this, std::placeholders::_1);
+	AssetManager::GetInstance().GetLoadCallback<Texture>() = std::bind(&MaterialData::OnTextureLoaded, &mMaterialData, _1, _2, _3);
+	AssetManager::GetInstance().GetUnloadCallback<Texture>() = std::bind(&MaterialData::OnTextureUnloaded, &mMaterialData, _1);
+	AssetManager::GetInstance().GetLoadCallback<Material>() = std::bind(&MaterialData::OnMaterialLoaded, &mMaterialData, _1, _2, _3);
+	AssetManager::GetInstance().GetUnloadCallback<Material>() = std::bind(&MaterialData::OnMaterialUnloaded, &mMaterialData, _1);
 
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\default_texture.png");
 	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\viking_room.png");
@@ -698,46 +701,8 @@ void App::CreateDepthResources() {
 	);
 }
 
-void App::CreateUniformBuffers() {
-	VkDeviceSize bufferSize = sizeof(CameraData);
-
-	mUniformBuffers.resize(gMaxFramesInFlight);
-	mUniformBuffersMemory.resize(gMaxFramesInFlight);
-	mUniformBuffersMapped.resize(gMaxFramesInFlight);
-
-	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
-		Utils::BufferUtils::CreateBuffer(
-			bufferSize,
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			mUniformBuffers[i],
-			mUniformBuffersMemory[i]
-		);
-
-		vkMapMemory(mLogicalDevice, mUniformBuffersMemory[i], 0, bufferSize, 0, &mUniformBuffersMapped[i]);
-	}
-}
-
-void App::CreateDescriptorPools() {
-	LOG_MSG("Creating descriptor pools", LogVerbosity::Info);
-
-	// ----- Frame descriptor pool -----
-	// What type of descriptors our sets will contain, and how many
-	VkDescriptorPoolSize framePoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(gMaxFramesInFlight) };
-
-	// We have already said how many descriptors are available,
-	// but we also need to specify how many descriptor sets may
-	// be allocated via '.maxSets'
-	VkDescriptorPoolCreateInfo poolInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = static_cast<uint32_t>(gMaxFramesInFlight),
-		.poolSizeCount = 1,
-		.pPoolSizes = &framePoolSize,
-	};
-
-	if (vkCreateDescriptorPool(mLogicalDevice, &poolInfo, nullptr, &mFrameDescriptorPool) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create frame descriptor pool!");
-	}
+void App::CreateMaterialDescriptorPool() {
+	LOG_MSG("Creating material descriptor pool", LogVerbosity::Info);
 
 	// ----- Material descriptor pool -----
 	std::array<VkDescriptorPoolSize, 2> materialPoolSizes = {
@@ -745,7 +710,7 @@ void App::CreateDescriptorPools() {
 		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 }, // denseIdToTexSlot[], materialParams[], denseIdToMatSlot[]
 	};
 
-	poolInfo = {
+	VkDescriptorPoolCreateInfo poolInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 
 		// Allow updating sets after 'vkBindDescriptorSets'
@@ -758,247 +723,6 @@ void App::CreateDescriptorPools() {
 
 	if (vkCreateDescriptorPool(mLogicalDevice, &poolInfo, nullptr, &mMaterialDescriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create material descriptor pool!");
-	}
-}
-
-void App::CreateFrameDescriptorSets() {
-	LOG_MSG("Creating frame descriptor sets", LogVerbosity::Info);
-
-	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Global);
-	std::vector<VkDescriptorSetLayout> layouts(gMaxFramesInFlight, layoutPreset);
-
-	VkDescriptorSetAllocateInfo allocInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = mFrameDescriptorPool,
-		.descriptorSetCount = static_cast<uint32_t>(gMaxFramesInFlight),
-		.pSetLayouts = layouts.data()
-	};
-
-	mFrameDescriptorSets.resize(gMaxFramesInFlight);
-	if (vkAllocateDescriptorSets(mLogicalDevice, &allocInfo, mFrameDescriptorSets.data()) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to allocate frame descriptor sets!");
-	}
-
-	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
-		// Which buffer? And where the region within it
-		// that contains the data for the descriptor
-		VkDescriptorBufferInfo bufferInfo{
-			.buffer = mUniformBuffers[i],
-			.offset = 0,
-			.range = sizeof(CameraData)
-		};
-
-		VkWriteDescriptorSet descriptorWrite{
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = mFrameDescriptorSets[i],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &bufferInfo
-		};
-
-		// Apply updates - this accepts write arrays, and copy arrays
-		vkUpdateDescriptorSets(
-			mLogicalDevice, 
-
-			// Write array
-			1, 
-			&descriptorWrite, 
-
-			// Copy array
-			0, 
-			nullptr
-		);
-	}
-}
-
-void App::CreateMaterialBuffers() {
-	mDenseIdToTextureSlot.Init(sizeof(AssetDefs::TextureSlot) * AssetManagerGlobals::AssetTraits<Texture>::config.maxCount);
-	mMaterialParamsBuffer.Init(sizeof(MaterialParams) * AssetManagerGlobals::AssetTraits<Material>::config.maxCount);
-	mDenseIdToMaterialSlot.Init(sizeof(AssetDefs::MaterialSlot) * AssetManagerGlobals::AssetTraits<Material>::config.maxCount);
-}
-
-void App::CreateMaterialDescriptorSet() {
-	LOG_MSG("Creating material descriptor sets", LogVerbosity::Info);
-
-	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Material);
-
-	VkDescriptorSetAllocateInfo allocInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = mMaterialDescriptorPool,
-		.descriptorSetCount = 1,
-		.pSetLayouts = &layoutPreset
-	};
-
-	if (vkAllocateDescriptorSets(mLogicalDevice, &allocInfo, &mMaterialDescriptorSet) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to allocate material descriptor set!");
-	}
-
-	// Initial SSBO mappings
-	mDenseIdToTextureSlot.WriteToDescriptorSet(mMaterialDescriptorSet, 1);
-	mMaterialParamsBuffer.WriteToDescriptorSet(mMaterialDescriptorSet, 2);
-	mDenseIdToMaterialSlot.WriteToDescriptorSet(mMaterialDescriptorSet, 3);
-}
-
-void App::OnTextureLoaded(std::weak_ptr<Texture> _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot) {
-	auto tex = _tex.lock();
-	if (!tex) {
-		std::cout << "OnTextureLoaded: '_tex' is invalid!\n";
-		return;
-	}
-
-	mDenseIdToTextureSlot.GetElement<AssetDefs::TextureSlot>(_denseId) = _texSlot;
-
-	// We need a new texture sampler for this texture index
-	if (!mTextureSlotToSampler.contains(_texSlot)) {
-		CreateTextureSamplerForSlot(_texSlot);
-	}
-
-	VkDescriptorImageInfo imageInfo{
-		.sampler = mTextureSlotToSampler[_texSlot],
-		.imageView = tex->GetImageView(),
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	};
-
-	VkWriteDescriptorSet descriptorWrite{
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = mMaterialDescriptorSet,
-		.dstBinding = 0,
-		.dstArrayElement = _texSlot,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.pImageInfo = &imageInfo
-	};
-
-	// Apply updates - this accepts write arrays, and copy arrays
-	vkUpdateDescriptorSets(
-		mLogicalDevice,
-
-		// Write array
-		1,
-		&descriptorWrite,
-
-		// Copy array
-		0,
-		nullptr
-	);
-}
-
-void App::OnTextureUnloaded(AssetDefs::DenseId _denseId) {
-	AssetDefs::TextureSlot& textureSlot = mDenseIdToTextureSlot.GetElement<AssetDefs::TextureSlot>(_denseId);
-	
-	// Destroy the sampler at texture slot
-	vkDestroySampler(mLogicalDevice, mTextureSlotToSampler[textureSlot], nullptr);
-
-	// Remove slot -> sampler mapping
-	mTextureSlotToSampler.erase(textureSlot);
-
-	// Point slot to 'default_tex', in the case that a material is still referencing it
-	textureSlot = 0;
-}
-
-void App::CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot) {
-	VkSamplerCreateInfo samplerInfo = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_LINEAR, // concerns oversampling
-		.minFilter = VK_FILTER_LINEAR, // concerns undersampling
-
-		// What to do when sampling outside the texture borders
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-
-		// Enable anisotropy, as it is relatively cheap nowadays
-		.anisotropyEnable = VK_TRUE,
-
-		// If a comparision function is enabled, texels are first compared
-		// to some value and the result of the comparison is used for filtering
-		.compareEnable = VK_FALSE,
-		.compareOp = VK_COMPARE_OP_ALWAYS,
-
-		// Border color when sampling outside the texture borders
-		// and address mode is 'clamp to border'
-		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
-
-		// If true, sampler uses [0..texWidth] and [0..texHeight] for
-		// sampling texture coordinates. If false, simply use [0..1]
-		// Note, most applications keep this false so UVs are [0..1]
-		.unnormalizedCoordinates = VK_FALSE,
-	};
-
-	// We define these here because they are not in a sensible order
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.f;
-	samplerInfo.minLod = 0.f;
-	samplerInfo.maxLod = VK_LOD_CLAMP_NONE; // no max lod
-
-	// Query max anisotropy supported by device
-	VkPhysicalDeviceProperties properties = {};
-	vkGetPhysicalDeviceProperties(App::GetInstance().GetPhysicalDevice(), &properties);
-
-	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-
-	mTextureSlotToSampler[_texSlot] = {};
-	if (vkCreateSampler(App::GetInstance().GetLogicalDevice(), &samplerInfo, nullptr, &mTextureSlotToSampler[_texSlot]) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to create texture sampler!");
-	}
-}
-
-void App::OnMaterialLoaded(std::weak_ptr<Material> _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot) {
-	auto mat = _mat.lock();
-	if (!mat) {
-		std::cout << "OnMaterialLoaded: '_mat' is invalid!\n";
-		return;
-	}
-
-	MaterialParams& paramsToFill = mMaterialParamsBuffer.GetElement<MaterialParams>(_denseId);
-	mDenseIdToMaterialSlot.GetElement<AssetDefs::MaterialSlot>(_denseId) = _matSlot;
-
-	// Copy material params into ssbo
-	paramsToFill = *mat->params;
-	
-	// Free CPU-side pointer
-	delete mat->params;
-
-	// Set material to point to ssbo memory
-	mat->params = &paramsToFill;
-}
-
-void App::OnMaterialUnloaded(AssetDefs::DenseId _denseId) {
-	// Reset ssbo's to defaults, in the case they are still being referenced
-	mMaterialParamsBuffer.GetElement<MaterialParams>(_denseId) = {};
-	mDenseIdToMaterialSlot.GetElement<AssetDefs::MaterialSlot>(_denseId) = 0;
-}
-
-uint32_t App::FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const {
-	VkPhysicalDeviceMemoryProperties memProperties = {};
-	vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &memProperties);
-
-	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-		bool suitableMemoryType = (_typeFilter & (1 << i));
-		bool allPropertiesSupported = (memProperties.memoryTypes[i].propertyFlags & _properties);
-
-		if (suitableMemoryType && allPropertiesSupported) {
-			return i;
-		}
-	}
-
-	throw std::runtime_error("Failed to find suitable memory type!");
-}
-
-void App::CreateCommandBuffers() {
-	mCommandBuffers.resize(gMaxFramesInFlight);
-
-	VkCommandBufferAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = mCommandPool,
-		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		.commandBufferCount = (uint32_t)(mCommandBuffers.size())
-	};
-
-	if (vkAllocateCommandBuffers(mLogicalDevice, &allocInfo, mCommandBuffers.data()) != VK_SUCCESS) {
-		throw std::runtime_error("Failed to allocate command buffers!");
 	}
 }
 
@@ -1081,7 +805,7 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 		// Eventually, this will only be called at the beginning of each sub-pass,
 		// where we also will switch pipeline layout
 		const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
-		std::array<VkDescriptorSet, 2> sets = { mFrameDescriptorSets[mCurrentFrame], mMaterialDescriptorSet };
+		std::array<VkDescriptorSet, 2> sets = { mFrameData[mCurrentFrame].GetDescriptorSet(), mMaterialData.GetDescriptorSet() };
 
 		vkCmdBindDescriptorSets(
 			_commandBuffer, 
@@ -1119,30 +843,6 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 
 	if (vkEndCommandBuffer(_commandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to record command buffer!");
-	}
-}
-
-void App::CreateSyncObjects() {
-	mImageAvailableSemaphores.resize(gMaxFramesInFlight);
-	mInFlightFences.resize(gMaxFramesInFlight);
-
-	VkSemaphoreCreateInfo semaphoreInfo = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-	};
-
-	// Create the fence in the signalled state, so that on the
-	// first frame we do not wait infinitely
-	VkFenceCreateInfo fenceInfo = {
-		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-		.flags = VK_FENCE_CREATE_SIGNALED_BIT
-	};
-
-	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
-		if (vkCreateSemaphore(mLogicalDevice, &semaphoreInfo, nullptr, &mImageAvailableSemaphores[i]) != VK_SUCCESS ||
-			vkCreateFence(mLogicalDevice, &fenceInfo, nullptr, &mInFlightFences[i]) != VK_SUCCESS)
-		{
-			throw std::runtime_error("Failed to create sync objects for a frame!");
-		}
 	}
 }
 
@@ -1221,12 +921,17 @@ void App::MainLoop() {
 }
 
 void App::DrawFrame(float _deltaTime) {
+	const FrameData& currentFrameData = mFrameData[mCurrentFrame];
+	const VkFence& inFlightFence = currentFrameData.GetInFlightFence();
+	const VkSemaphore& imageAvailableSemaphore = currentFrameData.GetImageAvailableSemaphore();
+	const VkCommandBuffer& commandBuffer = currentFrameData.GetCommandBuffer();
+
 	// Wait for all fences in an array, for uint64_t::max timeout
-	vkWaitForFences(mLogicalDevice, 1, &mInFlightFences[mCurrentFrame], VK_TRUE, UINT64_MAX);
+	vkWaitForFences(mLogicalDevice, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 
 	// Acquire image from swapchain, and only signal semaphore on completion
 	uint32_t imageIndex = 0;
-	VkResult result = mSwapchain->AcquireNextImage(mImageAvailableSemaphores[mCurrentFrame], imageIndex);
+	VkResult result = mSwapchain->AcquireNextImage(imageAvailableSemaphore, imageIndex);
 
 	// Swapchain is out of date and must be recreated,
 	// i.e window has been resized
@@ -1239,16 +944,16 @@ void App::DrawFrame(float _deltaTime) {
 	}
 
 	// Manually reset our fences, only if we are submitting work
-	vkResetFences(mLogicalDevice, 1, &mInFlightFences[mCurrentFrame]);
+	vkResetFences(mLogicalDevice, 1, &inFlightFence);
 
 	UpdateUniformBuffer(mCurrentFrame, _deltaTime);
 
 	// Reset + record our command buffer
-	vkResetCommandBuffer(mCommandBuffers[mCurrentFrame], 0);
-	RecordCommandBuffer(mCommandBuffers[mCurrentFrame], imageIndex);
+	vkResetCommandBuffer(commandBuffer, 0);
+	RecordCommandBuffer(commandBuffer, imageIndex);
 
 	VkSemaphore waitSemaphores[] = {
-		mImageAvailableSemaphores[mCurrentFrame]
+		imageAvailableSemaphore
 	};
 
 	VkPipelineStageFlags waitStages[] = {
@@ -1271,7 +976,7 @@ void App::DrawFrame(float _deltaTime) {
 
 		// Which command buffers to submit for execution
 		.commandBufferCount = 1,
-		.pCommandBuffers = &mCommandBuffers[mCurrentFrame],
+		.pCommandBuffers = &commandBuffer,
 
 		// Which semaphores to signal when command buffers
 		// have finished their execution
@@ -1280,7 +985,7 @@ void App::DrawFrame(float _deltaTime) {
 	};
 
 	// Submit drawing commands, and signal our fence when done
-	if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFences[mCurrentFrame]) != VK_SUCCESS) {
+	if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to submit draw command buffer!");
 	}
 
@@ -1336,7 +1041,8 @@ void App::UpdateUniformBuffer(uint32_t _currentImage, float _deltaTime) {
 
 	// Copy ubo directly into already mapped buffer
 	const CameraData& camData = mCamera->GetGraphicsData();
-	memcpy(mUniformBuffersMapped[_currentImage], &camData, sizeof(CameraData));
+	void* mapped = mFrameData[_currentImage].GetUniformBuffer().mapped;
+	memcpy(mapped, &camData, sizeof(CameraData));
 }
 
 void App::OnInitialized() {
@@ -1355,25 +1061,13 @@ void App::OnCleanup() {
 
 	AssetManager::Shutdown();
 
-	mDenseIdToTextureSlot.Reset();
-	mMaterialParamsBuffer.Reset();
-	mDenseIdToMaterialSlot.Reset();
+	mMaterialData.Reset();
+	mFrameData.clear();
 
-	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
-		vkDestroyBuffer(mLogicalDevice, mUniformBuffers[i], nullptr);
-		vkFreeMemory(mLogicalDevice, mUniformBuffersMemory[i], nullptr);
-	}
-
-	vkDestroyDescriptorPool(mLogicalDevice, mFrameDescriptorPool, nullptr);
 	vkDestroyDescriptorPool(mLogicalDevice, mMaterialDescriptorPool, nullptr);
 
 	for (size_t i = 0; i < mRenderPasses.size(); i++) {
 		vkDestroyRenderPass(mLogicalDevice, mRenderPasses[i], nullptr);
-	}
-
-	for (size_t i = 0; i < gMaxFramesInFlight; i++) {
-		vkDestroySemaphore(mLogicalDevice, mImageAvailableSemaphores[i], nullptr);
-		vkDestroyFence(mLogicalDevice, mInFlightFences[i], nullptr);
 	}
 
 	vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);

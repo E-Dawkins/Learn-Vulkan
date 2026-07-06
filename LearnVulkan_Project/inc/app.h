@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "renderer/camera.h"
+#include "renderer/renderer_types.h"
 #include "renderer/swapchain.h"
 #include "renderer/texture.h"
 #include "renderer/window.h"
@@ -20,23 +21,6 @@
 
 class Material;
 class Mesh;
-
-struct QueueFamilyIndices
-{
-	std::optional<uint32_t> graphicsFamily;
-	std::optional<uint32_t> presentFamily;
-
-	bool IsComplete() const {
-		return graphicsFamily.has_value() && presentFamily.has_value();
-	}
-};
-
-struct MultisampleState
-{
-	VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-	VkBool32 sampleShadingEnabled = VK_FALSE;
-	float minSampleShading = 1.f;
-};
 
 class App : public ISingleton<App>
 {
@@ -53,23 +37,10 @@ private:
 	std::vector<VkRenderPass> mRenderPasses;
 	VkCommandPool mCommandPool;
 
-	std::vector<VkBuffer> mUniformBuffers;
-	std::vector<VkDeviceMemory> mUniformBuffersMemory;
-	std::vector<void*> mUniformBuffersMapped;
-
-	VkDescriptorPool mFrameDescriptorPool;
-	std::vector<VkDescriptorSet> mFrameDescriptorSets;
-
 	VkDescriptorPool mMaterialDescriptorPool;
-	VkDescriptorSet mMaterialDescriptorSet;
-	std::unordered_map<AssetDefs::TextureSlot, VkSampler> mTextureSlotToSampler;
-	Utils::BufferUtils::Ssbo mDenseIdToTextureSlot;
-	Utils::BufferUtils::Ssbo mMaterialParamsBuffer;
-	Utils::BufferUtils::Ssbo mDenseIdToMaterialSlot;
+	MaterialData mMaterialData;
 
-	std::vector<VkCommandBuffer> mCommandBuffers;
-	std::vector<VkSemaphore> mImageAvailableSemaphores; // signal that an image has been acquired
-	std::vector<VkFence> mInFlightFences; // make sure only one frame is rendering at a time
+	std::vector<FrameData> mFrameData;
 	uint32_t mCurrentFrame = 0;
 
 	MultisampleState mMsaaState;
@@ -128,24 +99,9 @@ private:
 	VkFormat FindDepthFormat();
 	void CreateDepthResources();
 
-	void CreateUniformBuffers();
+	void CreateMaterialDescriptorPool();
 
-	void CreateDescriptorPools();
-
-	void CreateFrameDescriptorSets();
-
-	void CreateMaterialBuffers();
-	void CreateMaterialDescriptorSet();
-	void OnTextureLoaded(std::weak_ptr<Texture> _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
-	void OnTextureUnloaded(AssetDefs::DenseId _denseId);
-	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
-	void OnMaterialLoaded(std::weak_ptr<Material> _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot);
-	void OnMaterialUnloaded(AssetDefs::DenseId _denseId);
-
-	uint32_t FindMemoryType(uint32_t _typeFilter, VkMemoryPropertyFlags _properties) const;
-	void CreateCommandBuffers();
 	void RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) const;
-	void CreateSyncObjects();
 	void RecreateSwapchain();
 	void CleanupSwapchain(bool _isFinalCleanup = false);
 
