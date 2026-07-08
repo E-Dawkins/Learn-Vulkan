@@ -50,13 +50,18 @@ void Window::SetupCallbacks() {
 	glfwSetFramebufferSizeCallback(mWindow, [](GLFWwindow* _window, int _width, int _height) {
 		if (Window* windowPtr = static_cast<Window*>(glfwGetWindowUserPointer(_window))) {
 			windowPtr->mExtents = { _width, _height };
-			windowPtr->onWindowResized(glm::ivec2(_width, _height));
+
+			if (windowPtr->onWindowResized) {
+				windowPtr->onWindowResized(glm::ivec2(_width, _height));
+			}
 		}
 	});
 
 	glfwSetMouseButtonCallback(mWindow, [](GLFWwindow* _window, int _button, int _action, int) {
 		if (Window* windowPtr = static_cast<Window*>(glfwGetWindowUserPointer(_window))) {
-			windowPtr->onMouseClicked(_button, _action);
+			if (windowPtr->onMouseClicked) {
+				windowPtr->onMouseClicked(_button, _action);
+			}
 		}
 	});
 
@@ -65,8 +70,10 @@ void Window::SetupCallbacks() {
 		const glm::vec2 currentMousePos{ _xPos, _yPos };
 
 		if (Window* windowPtr = static_cast<Window*>(glfwGetWindowUserPointer(_window))) {
-			// Subtraction is flipped as we must negate both axes for it to be sensible to use
-			windowPtr->onMouseMoved(lastMousePos - currentMousePos);
+			if (windowPtr->onMouseMoved) {
+				// Subtraction is flipped as we must negate both axes for it to be sensible to use
+				windowPtr->onMouseMoved(lastMousePos - currentMousePos);
+			}
 		}
 
 		lastMousePos = { _xPos, _yPos };
@@ -74,13 +81,17 @@ void Window::SetupCallbacks() {
 
 	glfwSetScrollCallback(mWindow, [](GLFWwindow* _window, double _xDelta, double _yDelta) {
 		if (Window* windowPtr = static_cast<Window*>(glfwGetWindowUserPointer(_window))) {
-			windowPtr->onMouseScrolled(glm::vec2(_xDelta, _yDelta));
+			if (windowPtr->onMouseScrolled) {
+				windowPtr->onMouseScrolled(glm::vec2(_xDelta, _yDelta));
+			}
 		}
 	});
 
 	glfwSetKeyCallback(mWindow, [](GLFWwindow* _window, int _key, int, int _action, int) {
 		if (Window* windowPtr = static_cast<Window*>(glfwGetWindowUserPointer(_window))) {
-			windowPtr->onKeyInput(_key, _action);
+			if (windowPtr->onKeyInput) {
+				windowPtr->onKeyInput(_key, _action);
+			}
 		}
 	});
 }

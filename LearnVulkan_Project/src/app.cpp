@@ -37,6 +37,7 @@ const bool gEnableValidationLayers = true;
 
 void App::Run() {
 	InitWindow();
+	SetupInput();
 	InitVulkan();
 
 	Start();
@@ -50,32 +51,76 @@ void App::InitWindow() {
 	using namespace std::placeholders;
 
 	mWindow->onWindowResized = [](glm::vec2) { App::GetInstance().mFramebufferResized = true; };
-	mWindow->onMouseClicked = std::bind(&App::ProcessMouseInput, this, _1, _2);
-	mWindow->onMouseMoved = std::bind(&App::ProcessMouseMovement, this, _1);
-	mWindow->onMouseScrolled = std::bind(&App::ProcessMouseScroll, this, _1);
-	mWindow->onKeyInput = std::bind(&App::ProcessKeyInput, this, _1, _2);
 }
 
-void App::ProcessMouseMovement(const glm::vec2& _deltaPos) {
-	// Only allow look input if cursor is locked to window
-	if (mWindow->GetMouseInputMode() != GLFW_CURSOR_NORMAL) {
-		mCamera->AddLookInput(1.f, _deltaPos);
+void App::SetupInput() {
+	InputManager& inputInst = InputManager::GetInstance();
+
+	inputInst.BindToWindow(*mWindow); // this binds the input manager to window input events
+
+	// Move inputs
+	{
+		inputInst.AddKeyEvent(GLFW_KEY_W, KeyState::HOLD, 1.f, MAKE_CB(App::Event_MoveForward, this));
+		inputInst.AddKeyEvent(GLFW_KEY_S, KeyState::HOLD, -1.f, MAKE_CB(App::Event_MoveForward, this));
+		inputInst.AddKeyEvent(GLFW_KEY_D, KeyState::HOLD, 1.f, MAKE_CB(App::Event_MoveRight, this));
+		inputInst.AddKeyEvent(GLFW_KEY_A, KeyState::HOLD, -1.f, MAKE_CB(App::Event_MoveRight, this));
+		inputInst.AddKeyEvent(GLFW_KEY_SPACE, KeyState::HOLD, 1.f, MAKE_CB(App::Event_MoveUp, this));
+		inputInst.AddKeyEvent(GLFW_KEY_LEFT_CONTROL, KeyState::HOLD, -1.f, MAKE_CB(App::Event_MoveUp, this));
+	}
+	
+	// Look inputs
+	{
+		inputInst.AddKeyEvent(GLFW_KEY_L, KeyState::PRESS, 1.f, MAKE_CB(App::Event_LockCursor, this));
+		inputInst.AddKeyEvent(GLFW_KEY_U, KeyState::PRESS, -1.f, MAKE_CB(App::Event_LockCursor, this));
+		inputInst.AddKeyEvent(GLFW_KEY_R, KeyState::PRESS, 1.f, MAKE_CB(App::Event_LookAtOrigin, this));
+
+		inputInst.AddMouseEvent(MouseState::MOVE, glm::vec2(0.1f, 0.1f), MAKE_CB(App::Event_MouseMove, this));
+		inputInst.AddMouseEvent(MouseState::SCROLL, glm::vec2(1, 1), MAKE_CB(App::Event_MouseScroll, this));
+	}
+
+	// Mouse buttons
+	{
+		inputInst.AddKeyEvent(GLFW_MOUSE_BUTTON_LEFT, KeyState::PRESS, 1.f, MAKE_CB(App::Event_IterateTextures, this));
+		inputInst.AddKeyEvent(GLFW_MOUSE_BUTTON_RIGHT, KeyState::PRESS, 1.f, MAKE_CB(App::Event_IterateColors, this));
+		inputInst.AddKeyEvent(GLFW_MOUSE_BUTTON_MIDDLE, KeyState::PRESS, 1.f, MAKE_CB(App::Event_ToggleTextureLoad, this));
 	}
 }
 
-void App::ProcessMouseScroll(const glm::vec2& _scrollDelta) {
-	float flySpeed = (mCamera->flySpeed + (_scrollDelta.y * 0.5f));
+void App::Event_MoveForward(float _scale) {
+	mCamera->AddMoveInput(_scale, mCamera->transform.GetForwardVector());
+}
+
+void App::Event_MoveRight(float _scale) {
+	mCamera->AddMoveInput(_scale, mCamera->transform.GetRightVector());
+}
+
+void App::Event_MoveUp(float _scale) {
+	mCamera->AddMoveInput(_scale, gWorldUp);
+}
+
+void App::Event_LockCursor(float _scale) {
+	mWindow->SetMouseInputMode(_scale > 0.f ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+}
+
+void App::Event_LookAtOrigin(float /*_scale*/) {
+	mCamera->transform.LookAt({ 0, 0, 0 }, true);
+}
+
+void App::Event_MouseMove(const glm::vec2& _scale) {
+	// Only allow look input if cursor is locked to window
+	if (mWindow->GetMouseInputMode() != GLFW_CURSOR_NORMAL) {
+		mCamera->AddYawInput(_scale.x);
+		mCamera->AddPitchInput(_scale.y);
+	}
+}
+
+void App::Event_MouseScroll(const glm::vec2& _scale) {
+	float flySpeed = (mCamera->flySpeed + (_scale.y * 0.5f));
 	mCamera->flySpeed = glm::clamp(flySpeed, 0.5f, 5.f);
 }
 
-void App::ProcessMouseInput(int _button, int _action) {
-	auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").lock();
-	if (!testMaterial) {
-		std::cout << "MouseButtonCallback: 'testMaterial' is invalid!\n";
-		return;
-	}
-
-	if (_button == GLFW_MOUSE_BUTTON_LEFT && _action == GLFW_PRESS) {
+void App::Event_IterateTextures(float /*_scale*/) {
+	if (auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").lock()) {
 		// Grab params* from material asset, and directly access its elements
 		AssetDefs::DenseId& texId = testMaterial->params->denseTexIds[0];
 		texId = (texId + 1) % 3;
@@ -84,55 +129,26 @@ void App::ProcessMouseInput(int _button, int _action) {
 			texId++;
 		}
 	}
+}
 
-	if (_button == GLFW_MOUSE_BUTTON_RIGHT && _action == GLFW_PRESS) {
+void App::Event_IterateColors(float /*_scale*/) {
+	if (auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").lock()) {
 		// Grab params* from material asset, and directly access its elements
 		int32_t& intVar = testMaterial->params->intVars[0];
 		intVar = (intVar + 1) % 6;
 	}
-
-	if (_button == GLFW_MOUSE_BUTTON_MIDDLE && _action == GLFW_PRESS) {
-		AssetManager& managerInst = AssetManager::GetInstance();
-
-		const std::string texPath = "textures\\statue.jpg";
-
-		if (managerInst.IsAssetLoaded<Texture>(texPath)) {
-			managerInst.UnloadAsset<Texture>(texPath);
-		}
-		else {
-			managerInst.LoadAsset<Texture>(std::filesystem::path("assets") / texPath);
-		}
-	}
 }
 
-void App::ProcessKeyInput(int _key, int _action) {
-	// Camera move
-	{
-		float upInput = (float)(_key == GLFW_KEY_SPACE) - (float)(_key == GLFW_KEY_LEFT_CONTROL);
-		mCamera->AddMoveInput(upInput, gWorldUp);
+void App::Event_ToggleTextureLoad(float /*_scale*/) {
+	AssetManager& managerInst = AssetManager::GetInstance();
 
-		float forwardInput = (float)(_key == GLFW_KEY_W) - (float)(_key == GLFW_KEY_S);
-		mCamera->AddMoveInput(forwardInput, mCamera->transform.GetForwardVector());
+	const std::string texPath = "textures\\statue.jpg";
 
-		float rightInput = (float)(_key == GLFW_KEY_D) - (float)(_key == GLFW_KEY_A);
-		mCamera->AddMoveInput(rightInput, mCamera->transform.GetRightVector());
+	if (managerInst.IsAssetLoaded<Texture>(texPath)) {
+		managerInst.UnloadAsset<Texture>(texPath);
 	}
-
-	// Camera look
-	{
-		if (_key == GLFW_KEY_L && _action == GLFW_PRESS) {
-			mWindow->SetMouseInputMode(GLFW_CURSOR_DISABLED);
-		}
-
-		if (_key == GLFW_KEY_U && _action == GLFW_PRESS) {
-			mWindow->SetMouseInputMode(GLFW_CURSOR_NORMAL);
-
-		}
-
-		// Point camera at origin
-		if (_key == GLFW_KEY_R && _action == GLFW_PRESS) {
-			mCamera->transform.LookAt({ 0, 0, 0 }, true);
-		}
+	else {
+		managerInst.LoadAsset<Texture>(std::filesystem::path("assets") / texPath);
 	}
 }
 
@@ -907,6 +923,7 @@ void App::MainLoop() {
 		{
 			glfwPollEvents();
 
+			InputManager::GetInstance().DispatchEvents();
 			mCamera->Update(deltaTime);
 
 			DrawFrame(deltaTime);

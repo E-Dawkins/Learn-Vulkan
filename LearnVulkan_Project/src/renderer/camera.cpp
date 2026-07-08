@@ -143,11 +143,14 @@ void FlyCamera::AddMoveInput(float _scale, glm::vec3 _worldDirection) {
 	mMoveInput += glm::normalize(_worldDirection) * _scale;
 }
 
-void FlyCamera::AddLookInput(float _scale, glm::vec2 _mouseDirection) {
-	if (_scale == 0.f || _mouseDirection == glm::zero<glm::vec2>()) {
-		// Can't look by 0 units
-		return;
+void FlyCamera::AddYawInput(float _scale) {
+	if (_scale != 0.f) {
+		mLookInput.x += _scale;
 	}
+}
 
-	mLookInput += glm::normalize(_mouseDirection) * _scale;
+void FlyCamera::AddPitchInput(float _scale) {
+	if (_scale != 0.f) {
+		mLookInput.y += _scale;
+	}
 }

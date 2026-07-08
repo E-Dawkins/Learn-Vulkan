@@ -17,6 +17,7 @@
 #include "renderer/texture.h"
 #include "renderer/window.h"
 #include "utils/buffer_utils.h"
+#include "utils/input_manager.h"
 #include "utils/type_defs.h"
 
 class Material;
@@ -74,10 +75,17 @@ public:
 private:
 	void InitWindow();
 
-	void ProcessMouseMovement(const glm::vec2& _deltaPos);
-	void ProcessMouseScroll(const glm::vec2& _scrollDelta);
-	void ProcessMouseInput(int _button, int _action);
-	void ProcessKeyInput(int _key, int _action);
+	void SetupInput();
+	void Event_MoveForward(float _scale);
+	void Event_MoveRight(float _scale);
+	void Event_MoveUp(float _scale);
+	void Event_LockCursor(float _scale);
+	void Event_LookAtOrigin(float _scale);
+	void Event_MouseMove(const glm::vec2& _scale);
+	void Event_MouseScroll(const glm::vec2& _scale);
+	void Event_IterateTextures(float _scale);
+	void Event_IterateColors(float _scale);
+	void Event_ToggleTextureLoad(float _scale);
 
 	void InitVulkan();
 	void CreateInstance();

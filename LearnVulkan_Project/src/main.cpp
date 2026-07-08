@@ -2,15 +2,18 @@
 
 #include "app.h"
 #include "utils/debug_logger.h"
+#include "utils/input_manager.h"
 
 int main() {
 	try {
 		DebugLogger::Init();
+		InputManager::Init();
 		{
 			App::Init();
 			App::GetInstance().Run();
 			App::Shutdown();
 		}
+		InputManager::Shutdown();
 		DebugLogger::Shutdown();
 	}
 	catch (const std::exception& e) {

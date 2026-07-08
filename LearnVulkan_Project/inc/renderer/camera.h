@@ -83,5 +83,6 @@ public:
 	void Update(float _deltaTime) override;
 
 	void AddMoveInput(float _scale, glm::vec3 _worldDirection);
-	void AddLookInput(float _scale, glm::vec2 _mouseDirection);
+	void AddYawInput(float _scale);
+	void AddPitchInput(float _scale);
 };
