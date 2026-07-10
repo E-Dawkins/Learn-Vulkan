@@ -80,12 +80,12 @@ private:
 	void Event_MoveRight(float _scale);
 	void Event_MoveUp(float _scale);
 	void Event_LockCursor(float _scale);
-	void Event_LookAtOrigin(float _scale);
+	void Event_LookAtOrigin();
 	void Event_MouseMove(const glm::vec2& _scale);
 	void Event_MouseScroll(const glm::vec2& _scale);
-	void Event_IterateTextures(float _scale);
-	void Event_IterateColors(float _scale);
-	void Event_ToggleTextureLoad(float _scale);
+	void Event_IterateTextures();
+	void Event_IterateColors();
+	void Event_ToggleTextureLoad();
 
 	void InitVulkan();
 	void CreateInstance();

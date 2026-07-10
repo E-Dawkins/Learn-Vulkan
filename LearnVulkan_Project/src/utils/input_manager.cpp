@@ -16,22 +16,19 @@ void InputManager::BindToWindow(Window& _window) {
 	using namespace std::placeholders;
 
 	// Since GLFW keys are 32+, and mouse buttons 0-7, we can re-use the same logic
-	_window.onKeyInput = std::bind(&InputManager::ProcessKeyInput, this, _1, _2);
-	_window.onMouseClicked = std::bind(&InputManager::ProcessKeyInput, this, _1, _2);
+	_window.onKeyInput = std::bind(&InputManager::ProcessButtonInput, this, _1, _2);
+	_window.onMouseClicked = std::bind(&InputManager::ProcessButtonInput, this, _1, _2);
 
 	// These are specialized cases
 	_window.onMouseMoved = std::bind(&InputManager::ProcessMouseMovement, this, _1);
 	_window.onMouseScrolled = std::bind(&InputManager::ProcessMouseScroll, this, _1);
 }
 
-void InputManager::AddKeyEvent(Key _key, KeyState _state, float _scale, KeyEvent::Callback _callback) {
-	const size_t eventHash = GetKeyEventHash(_key, _state);
-	mKeyEvents[eventHash].push_back(KeyEvent{ .callback = _callback, .scale = _scale });
-}
-
-void InputManager::AddMouseEvent(MouseState _state, glm::vec2 _scale, MouseEvent::Callback _callback) {
-	const size_t eventHash = GetMouseEventHash(_state);
-	mMouseEvents[eventHash].push_back(MouseEvent{ .callback = _callback, .scale = _scale });
+void InputManager::AddInputEvent(Input _input, InputState _state, EventCallback<std::monostate> _callback) {
+	const size_t eventHash = GetInputEventHash(_input, _state);
+	mInputEvents[eventHash].push_back(InputManagerImpl::InputEvent<std::monostate>{
+		.callback = _callback
+	});
 }
 
 void InputManager::DispatchEvents() {
@@ -40,13 +37,8 @@ void InputManager::DispatchEvents() {
 
 		bool eventHandled = false;
 
-		if (mKeyEvents.contains(eventHash)) {
-			if (eventHandled = DispatchKeyEvent(eventHash); eventHandled) {
-				mQueuedEvents.erase(mQueuedEvents.begin() + i);
-			}
-		}
-		else if (mMouseEvents.contains(eventHash)) {
-			if (eventHandled = DispatchMouseEvent(eventHash); eventHandled) {
+		if (mInputEvents.contains(eventHash)) {
+			if (eventHandled = DispatchInputEvent(eventHash); eventHandled) {
 				mQueuedEvents.erase(mQueuedEvents.begin() + i);
 			}
 		}
@@ -62,70 +54,71 @@ void InputManager::DispatchEvents() {
 	}
 }
 
-constexpr size_t InputManager::GetKeyEventHash(Key _key, KeyState _state) const {
+constexpr size_t InputManager::GetInputEventHash(Input _input, InputState _state) const {
 	// ---- ---- XXXX XXXX => key
 	// XXXX XXXX ---- ---- => state
 	// *not 100% accurate, but an idea of the packing
 
-	return _key | (size_t(_state) << 16);
+	return (size_t)_input | (size_t(_state) << 16);
 }
 
-void InputManager::DeconstructKeyEventHash(size_t _hash, Key& _outKey, KeyState& _outState) {
-	_outKey = _hash & 0xFFFF; // first 16 bits
-	_outState = static_cast<KeyState>(_hash >> 16); // the rest
+void InputManager::DeconstructInputEventHash(size_t _hash, Input& _outInput, InputState& _outState) {
+	_outInput = static_cast<Input>(_hash & 0xFFFF); // first 16 bits
+	_outState = static_cast<InputState>(_hash >> 16); // the rest
 }
 
-constexpr KeyState InputManager::GetKeyStateFromAction(int _action) const {
+constexpr InputState InputManager::GetStateFromAction(int _action) const {
 	switch (_action) {
-		case GLFW_PRESS: return KeyState::PRESS;
-		case GLFW_REPEAT: return KeyState::HOLD;
-		default: return KeyState::RELEASE; // if undertermined, safest option is 'released'
+		case GLFW_PRESS: return InputState::PRESS;
+		case GLFW_REPEAT: return InputState::HOLD;
+		default: return InputState::RELEASE; // if undertermined, safest option is 'released'
 	}
 }
 
-bool InputManager::DispatchKeyEvent(size_t _eventHash) {
-	Key key;
-	KeyState state;
-	DeconstructKeyEventHash(_eventHash, key, state);
-
+bool InputManager::DispatchInputEvent(size_t _eventHash) {
+	Input button;
+	InputState state;
+	DeconstructInputEventHash(_eventHash, button, state);
+	
 	// Run all callback events
-	for (const auto& event : mKeyEvents[_eventHash]) {
-		event.callback(event.scale);
+	for (const auto& event : mInputEvents[_eventHash]) {
+		std::visit([&](auto& _e) {
+			using T = typename std::remove_reference_t<decltype(_e)>::ValueType;
+
+			if constexpr (std::is_same_v<T, void>) {
+				_e.callback();
+			}
+			else {
+				// Since 'mModifiers' and 'mInputEvents' share the same scale
+				// types, we can guarantee that 'T' is valid in this context
+				if (mModifiers.contains(_eventHash)) {
+					using T = decltype(_e.scale);
+
+					T modifier = std::get<T>(mModifiers[_eventHash]);
+					_e.callback(_e.scale * modifier);
+				}
+				else {
+					_e.callback(_e.scale);
+				}
+			}
+		}, event);
 	}
 
 	// We have 'handled' this event if it is not a 'HOLD' event
 	// or the old/new states are mismatched (i.e. HOLD -> RELEASED)
-	return (state != KeyState::HOLD)
-		|| (mKeyStates[key] != state);
+	return (state != InputState::HOLD)
+		|| (mButtonStates[button] != state);
 }
 
-constexpr size_t InputManager::GetMouseEventHash(MouseState _state) const {
-	// Since GLFW keys start from 32+, and mouse buttons
-	// range from 0-7, 10+ should be safe for custom events
-	return 10 + size_t(_state);
-}
+void InputManager::ProcessButtonInput(int _button, int _action) {
+	const Input button = static_cast<Input>(_button);
 
-bool InputManager::DispatchMouseEvent(size_t _eventHash) {
-	bool isMoveEvent = (_eventHash == GetMouseEventHash(MouseState::MOVE));
-	const glm::vec2 currentScale = (isMoveEvent ? mMouseMoveScale : mMouseScrollScale);
-
-	// Run all callback events
-	for (const auto& event : mMouseEvents[_eventHash]) {
-		event.callback(event.scale * currentScale);
-	}
-
-	return true;
-}
-
-void InputManager::ProcessKeyInput(int _key, int _action) {
-	const Key key = static_cast<Key>(_key);
-
-	KeyState& currentState = mKeyStates[key];
-	KeyState newState = GetKeyStateFromAction(_action);
+	InputState& currentState = mButtonStates[button];
+	InputState newState = GetStateFromAction(_action);
 
 	if (currentState != newState) {
 		// Queue event to be called later on
-		size_t eventHash = GetKeyEventHash(key, newState);
+		size_t eventHash = GetInputEventHash(button, newState);
 		mQueuedEvents.push_back(eventHash);
 
 		// Update mapping
@@ -134,15 +127,15 @@ void InputManager::ProcessKeyInput(int _key, int _action) {
 }
 
 void InputManager::ProcessMouseMovement(const glm::vec2& _deltaPos) {
-	mMouseMoveScale = _deltaPos;
+	size_t eventHash = GetInputEventHash(Input::MOUSE_MOVE, InputState::MOUSE_AXIS);
 
-	size_t eventHash = GetMouseEventHash(MouseState::MOVE);
+	mModifiers[eventHash] = _deltaPos;
 	mQueuedEvents.push_back(eventHash);
 }
 
 void InputManager::ProcessMouseScroll(const glm::vec2& _scrollDelta) {
-	mMouseScrollScale = _scrollDelta;
+	size_t eventHash = GetInputEventHash(Input::MOUSE_SCROLL, InputState::MOUSE_AXIS);
 	
-	size_t eventHash = GetMouseEventHash(MouseState::SCROLL);
+	mModifiers[eventHash] = _scrollDelta;
 	mQueuedEvents.push_back(eventHash);
 }

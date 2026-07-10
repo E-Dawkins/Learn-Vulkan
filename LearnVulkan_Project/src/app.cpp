@@ -60,29 +60,29 @@ void App::SetupInput() {
 
 	// Move inputs
 	{
-		inputInst.AddKeyEvent(GLFW_KEY_W, KeyState::HOLD, 1.f, MAKE_CB(App::Event_MoveForward, this));
-		inputInst.AddKeyEvent(GLFW_KEY_S, KeyState::HOLD, -1.f, MAKE_CB(App::Event_MoveForward, this));
-		inputInst.AddKeyEvent(GLFW_KEY_D, KeyState::HOLD, 1.f, MAKE_CB(App::Event_MoveRight, this));
-		inputInst.AddKeyEvent(GLFW_KEY_A, KeyState::HOLD, -1.f, MAKE_CB(App::Event_MoveRight, this));
-		inputInst.AddKeyEvent(GLFW_KEY_SPACE, KeyState::HOLD, 1.f, MAKE_CB(App::Event_MoveUp, this));
-		inputInst.AddKeyEvent(GLFW_KEY_LEFT_CONTROL, KeyState::HOLD, -1.f, MAKE_CB(App::Event_MoveUp, this));
+		inputInst.AddInputEvent(Input::W, InputState::HOLD, 1.f, MAKE_CB_1(App::Event_MoveForward, this));
+		inputInst.AddInputEvent(Input::S, InputState::HOLD, -1.f, MAKE_CB_1(App::Event_MoveForward, this));
+		inputInst.AddInputEvent(Input::D, InputState::HOLD, 1.f, MAKE_CB_1(App::Event_MoveRight, this));
+		inputInst.AddInputEvent(Input::A, InputState::HOLD, -1.f, MAKE_CB_1(App::Event_MoveRight, this));
+		inputInst.AddInputEvent(Input::SPACE, InputState::HOLD, 1.f, MAKE_CB_1(App::Event_MoveUp, this));
+		inputInst.AddInputEvent(Input::LEFT_CONTROL, InputState::HOLD, -1.f, MAKE_CB_1(App::Event_MoveUp, this));
 	}
 	
 	// Look inputs
 	{
-		inputInst.AddKeyEvent(GLFW_KEY_L, KeyState::PRESS, 1.f, MAKE_CB(App::Event_LockCursor, this));
-		inputInst.AddKeyEvent(GLFW_KEY_U, KeyState::PRESS, -1.f, MAKE_CB(App::Event_LockCursor, this));
-		inputInst.AddKeyEvent(GLFW_KEY_R, KeyState::PRESS, 1.f, MAKE_CB(App::Event_LookAtOrigin, this));
+		inputInst.AddInputEvent(Input::L, InputState::PRESS, 1.f, MAKE_CB_1(App::Event_LockCursor, this));
+		inputInst.AddInputEvent(Input::U, InputState::PRESS, -1.f, MAKE_CB_1(App::Event_LockCursor, this));
+		inputInst.AddInputEvent(Input::R, InputState::PRESS, MAKE_CB(App::Event_LookAtOrigin, this));
 
-		inputInst.AddMouseEvent(MouseState::MOVE, glm::vec2(0.1f, 0.1f), MAKE_CB(App::Event_MouseMove, this));
-		inputInst.AddMouseEvent(MouseState::SCROLL, glm::vec2(1, 1), MAKE_CB(App::Event_MouseScroll, this));
+		inputInst.AddInputEvent(Input::MOUSE_MOVE, InputState::MOUSE_AXIS, glm::vec2(0.1f), MAKE_CB_1(App::Event_MouseMove, this));
+		inputInst.AddInputEvent(Input::MOUSE_SCROLL, InputState::MOUSE_AXIS, glm::vec2(1), MAKE_CB_1(App::Event_MouseScroll, this));
 	}
 
 	// Mouse buttons
 	{
-		inputInst.AddKeyEvent(GLFW_MOUSE_BUTTON_LEFT, KeyState::PRESS, 1.f, MAKE_CB(App::Event_IterateTextures, this));
-		inputInst.AddKeyEvent(GLFW_MOUSE_BUTTON_RIGHT, KeyState::PRESS, 1.f, MAKE_CB(App::Event_IterateColors, this));
-		inputInst.AddKeyEvent(GLFW_MOUSE_BUTTON_MIDDLE, KeyState::PRESS, 1.f, MAKE_CB(App::Event_ToggleTextureLoad, this));
+		inputInst.AddInputEvent(Input::MOUSE_BUTTON_LEFT, InputState::PRESS, MAKE_CB(App::Event_IterateTextures, this));
+		inputInst.AddInputEvent(Input::MOUSE_BUTTON_RIGHT, InputState::PRESS, MAKE_CB(App::Event_IterateColors, this));
+		inputInst.AddInputEvent(Input::MOUSE_BUTTON_MIDDLE, InputState::PRESS, MAKE_CB(App::Event_ToggleTextureLoad, this));
 	}
 }
 
@@ -102,7 +102,7 @@ void App::Event_LockCursor(float _scale) {
 	mWindow->SetMouseInputMode(_scale > 0.f ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
 }
 
-void App::Event_LookAtOrigin(float /*_scale*/) {
+void App::Event_LookAtOrigin() {
 	mCamera->transform.LookAt({ 0, 0, 0 }, true);
 }
 
@@ -119,7 +119,7 @@ void App::Event_MouseScroll(const glm::vec2& _scale) {
 	mCamera->flySpeed = glm::clamp(flySpeed, 0.5f, 5.f);
 }
 
-void App::Event_IterateTextures(float /*_scale*/) {
+void App::Event_IterateTextures() {
 	if (auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").lock()) {
 		// Grab params* from material asset, and directly access its elements
 		AssetDefs::DenseId& texId = testMaterial->params->denseTexIds[0];
@@ -131,7 +131,7 @@ void App::Event_IterateTextures(float /*_scale*/) {
 	}
 }
 
-void App::Event_IterateColors(float /*_scale*/) {
+void App::Event_IterateColors() {
 	if (auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material").lock()) {
 		// Grab params* from material asset, and directly access its elements
 		int32_t& intVar = testMaterial->params->intVars[0];
@@ -139,7 +139,7 @@ void App::Event_IterateColors(float /*_scale*/) {
 	}
 }
 
-void App::Event_ToggleTextureLoad(float /*_scale*/) {
+void App::Event_ToggleTextureLoad() {
 	AssetManager& managerInst = AssetManager::GetInstance();
 
 	const std::string texPath = "textures\\statue.jpg";
