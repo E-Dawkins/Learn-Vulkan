@@ -4,6 +4,7 @@ setlocal
 REM %1 = shader filename
 set "SHADER=%~1"
 set "OUT_DIR=cached"
+set "INC_DIR=shared"
 
 if "%SHADER%"=="" (
     echo No shader file provided.
@@ -17,7 +18,7 @@ if not exist "%OUT_DIR%" (
 
 echo Compiling %SHADER%...
 
-"%VULKAN_SDK%\Bin\glslc.exe" "%SHADER%" -o "%OUT_DIR%\%SHADER%.spv"
+"%VULKAN_SDK%\Bin\glslc.exe" -I "%INC_DIR%" "%SHADER%" -o "%OUT_DIR%\%SHADER%.spv"
 if errorlevel 1 (
     echo %SHADER% compilation failed!
     echo(
