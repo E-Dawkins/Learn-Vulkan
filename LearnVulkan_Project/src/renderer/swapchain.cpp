@@ -88,7 +88,7 @@ void Swapchain::CreateImageViews() {
 	mImageViews.resize(mImages.size());
 
 	for (uint32_t i = 0; i < mImages.size(); i++) {
-		mImageViews[i] = Utils::ImageUtils::CreateImageView(mImages[i], mFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		mImageViews[i] = Utils::ImageUtils::CreateImageView(mImages[i], VK_IMAGE_VIEW_TYPE_2D, mFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, 1);
 	}
 }
 

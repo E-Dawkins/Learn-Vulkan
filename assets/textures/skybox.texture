@@ -1,0 +1,8 @@
+type:texPaths{
+	right="assets/textures/debug/debug_+X.png"
+	left="assets/textures/debug/debug_-X.png"
+	top="assets/textures/debug/debug_+Z.png"
+	bottom="assets/textures/debug/debug_-Z.png"
+	front="assets/textures/debug/debug_+Y.png"
+	back="assets/textures/debug/debug_-Y.png"
+}

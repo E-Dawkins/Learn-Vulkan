@@ -4,12 +4,12 @@
 #include "app.h"
 #include "utils/buffer_utils.h"
 
-void Utils::ImageUtils::CreateImage(uint32_t _width, uint32_t _height, uint32_t _mipLevels, VkSampleCountFlagBits _numSamples, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) {
+void Utils::ImageUtils::CreateImage(uint32_t _width, uint32_t _height, VkImageCreateFlags _flags, uint32_t _mipLevels, uint32_t _arrayLayers, VkSampleCountFlagBits _numSamples, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) {
 	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
 
 	VkImageCreateInfo imageInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.flags = 0,
+		.flags = _flags,
 		.imageType = VK_IMAGE_TYPE_2D,
 		.format = _format,
 		.extent = {
@@ -18,7 +18,7 @@ void Utils::ImageUtils::CreateImage(uint32_t _width, uint32_t _height, uint32_t 
 			.depth = 1
 		},
 		.mipLevels = _mipLevels,
-		.arrayLayers = 1,
+		.arrayLayers = _arrayLayers,
 		.samples = _numSamples,
 		.tiling = _tiling,
 		.usage = _usage,
@@ -50,7 +50,7 @@ void Utils::ImageUtils::CreateImage(uint32_t _width, uint32_t _height, uint32_t 
 	vkBindImageMemory(logicalDevice, _image, _imageMemory, 0);
 }
 
-void Utils::ImageUtils::TransitionImageLayout(VkImage _image, VkFormat /*_format*/, VkImageLayout _oldLayout, VkImageLayout _newLayout, uint32_t _mipLevels) {
+void Utils::ImageUtils::TransitionImageLayout(VkImage _image, VkFormat /*_format*/, VkImageLayout _oldLayout, VkImageLayout _newLayout, uint32_t _mipLevels, uint32_t _layerCount) {
 	VkCommandBuffer commandBuffer = App::GetInstance().BeginSingleTimeCommands();
 
 	VkImageMemoryBarrier barrier = {
@@ -69,7 +69,7 @@ void Utils::ImageUtils::TransitionImageLayout(VkImage _image, VkFormat /*_format
 			.baseMipLevel = 0,
 			.levelCount = _mipLevels,
 			.baseArrayLayer = 0,
-			.layerCount = 1
+			.layerCount = _layerCount
 		},
 	};
 
@@ -108,7 +108,7 @@ void Utils::ImageUtils::TransitionImageLayout(VkImage _image, VkFormat /*_format
 	App::GetInstance().EndSingleTimeCommands(commandBuffer);
 }
 
-void Utils::ImageUtils::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32_t _width, uint32_t _height) {
+void Utils::ImageUtils::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32_t _width, uint32_t _height, uint32_t _baseLayer) {
 	VkCommandBuffer commandBuffer = App::GetInstance().BeginSingleTimeCommands();
 
 	// Specify the region of the buffer copied to which part of the image
@@ -124,7 +124,7 @@ void Utils::ImageUtils::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint
 		.imageSubresource = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.mipLevel = 0,
-			.baseArrayLayer = 0,
+			.baseArrayLayer = _baseLayer,
 			.layerCount = 1
 		},
 		.imageOffset = { 0, 0, 0 },
@@ -143,13 +143,13 @@ void Utils::ImageUtils::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint
 	App::GetInstance().EndSingleTimeCommands(commandBuffer);
 }
 
-VkImageView Utils::ImageUtils::CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags, uint32_t _mipLevels) {
+VkImageView Utils::ImageUtils::CreateImageView(VkImage _image, VkImageViewType _viewType, VkFormat _format, VkImageAspectFlags _aspectFlags, uint32_t _mipLevels, uint32_t _layerCount) {
 	VkImageViewCreateInfo viewInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = _image,
 
 		// These specify how the image data is interpreted
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.viewType = _viewType,
 		.format = _format,
 
 		// This describes what the image purpose is, and which
@@ -160,7 +160,7 @@ VkImageView Utils::ImageUtils::CreateImageView(VkImage _image, VkFormat _format,
 			.baseMipLevel = 0,
 			.levelCount = _mipLevels,
 			.baseArrayLayer = 0,
-			.layerCount = 1
+			.layerCount = _layerCount
 		}
 	};
 

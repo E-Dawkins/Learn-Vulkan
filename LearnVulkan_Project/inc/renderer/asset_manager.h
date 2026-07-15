@@ -14,11 +14,13 @@
 template<typename T>
 concept ValidAssetType =
 	std::is_same_v<T, Texture> ||
+	std::is_same_v<T, CubemapTexture> ||
 	std::is_same_v<T, Material> ||
 	std::is_same_v<T, Mesh>;
 
 using AllAssetTypes = std::tuple<
 	std::type_identity<Texture>,
+	std::type_identity<CubemapTexture>,
 	std::type_identity<Material>,
 	std::type_identity<Mesh>
 >;
@@ -44,6 +46,15 @@ namespace AssetManagerGlobals {
 		static constexpr AssetTraitConfig config = {
 			.maxCount = 100,
 			.defaultAsset = "textures\\default_texture.png"
+		};
+	};
+
+	template<>
+	struct AssetTraits<CubemapTexture>
+	{
+		using SlotType = AssetDefs::CubemapSlot;
+		static constexpr AssetTraitConfig config = {
+			.maxCount = 100
 		};
 	};
 

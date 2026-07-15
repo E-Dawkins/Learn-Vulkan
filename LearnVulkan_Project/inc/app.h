@@ -48,6 +48,7 @@ private:
 	RuntimeTexture mDepthTexture;
 	RuntimeTexture mColorTexture;
 
+	std::weak_ptr<Mesh> mSkyboxMesh;
 	std::weak_ptr<Mesh> mTempMesh;
 	std::unique_ptr<FlyCamera> mCamera;
 

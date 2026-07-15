@@ -142,7 +142,7 @@ void App::Event_IterateColors() {
 void App::Event_ToggleTextureLoad() {
 	AssetManager& managerInst = AssetManager::GetInstance();
 
-	const std::string texPath = "textures\\statue.jpg";
+	const std::string texPath = "textures\\statue.texture";
 
 	if (managerInst.IsAssetLoaded<Texture>(texPath)) {
 		managerInst.UnloadAsset<Texture>(texPath);
@@ -194,19 +194,30 @@ void App::InitVulkan() {
 	using namespace std::placeholders;
 
 	AssetManager::Init();
-	AssetManager::GetInstance().GetLoadCallback<Texture>() = std::bind(&MaterialData::OnTextureLoaded, &mMaterialData, _1, _2, _3);
-	AssetManager::GetInstance().GetUnloadCallback<Texture>() = std::bind(&MaterialData::OnTextureUnloaded, &mMaterialData, _1);
-	AssetManager::GetInstance().GetLoadCallback<Material>() = std::bind(&MaterialData::OnMaterialLoaded, &mMaterialData, _1, _2, _3);
-	AssetManager::GetInstance().GetUnloadCallback<Material>() = std::bind(&MaterialData::OnMaterialUnloaded, &mMaterialData, _1);
+	
+	AssetManager& managerInst = AssetManager::GetInstance();
+	managerInst.GetLoadCallback<Texture>() = std::bind(&MaterialData::OnTextureLoaded, &mMaterialData, _1, _2, _3);
+	managerInst.GetUnloadCallback<Texture>() = std::bind(&MaterialData::OnTextureUnloaded, &mMaterialData, _1);
+	managerInst.GetLoadCallback<CubemapTexture>() = std::bind(&MaterialData::OnCubemapLoaded, &mMaterialData, _1, _2, _3);
+	managerInst.GetUnloadCallback<CubemapTexture>() = std::bind(&MaterialData::OnCubemapUnloaded, &mMaterialData, _1);
+	managerInst.GetLoadCallback<Material>() = std::bind(&MaterialData::OnMaterialLoaded, &mMaterialData, _1, _2, _3);
+	managerInst.GetUnloadCallback<Material>() = std::bind(&MaterialData::OnMaterialUnloaded, &mMaterialData, _1);
 
-	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\default_texture.png");
-	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\viking_room.png");
-	AssetManager::GetInstance().LoadAsset<Texture>("assets\\textures\\statue.jpg");
+	managerInst.LoadAsset<CubemapTexture>("assets\\textures\\skybox.texture");
 
-	auto testMat = AssetManager::GetInstance().LoadAsset<Material>("assets\\materials\\test.material");
+	managerInst.LoadAsset<Texture>("assets\\textures\\default_texture.texture");
+	managerInst.LoadAsset<Texture>("assets\\textures\\viking_room.texture");
+	managerInst.LoadAsset<Texture>("assets\\textures\\statue.texture");
 
-	mTempMesh = AssetManager::GetInstance().LoadAsset<Mesh>("assets\\models\\viking_room.mesh");
+	mSkyboxMesh = managerInst.LoadAsset<Mesh>("assets\\models\\primitives\\cube.mesh");
+	if (auto meshLock = mSkyboxMesh.lock()) {
+		auto skyboxMat = managerInst.LoadAsset<Material>("assets\\materials\\skybox.material");
+		meshLock->SetMaterial(skyboxMat);
+	}
+
+	mTempMesh = managerInst.LoadAsset<Mesh>("assets\\models\\viking_room.mesh");
 	if (auto meshLock = mTempMesh.lock()) {
+		auto testMat = managerInst.LoadAsset<Material>("assets\\materials\\test.material");
 		meshLock->SetMaterial(testMat);
 	}
 }
@@ -613,7 +624,7 @@ void App::CreateRenderPass() {
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	};
 
-	VkSubpassDescription subpass = {
+	VkSubpassDescription subpass0 = {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &colorAttachmentRef,
@@ -625,6 +636,21 @@ void App::CreateRenderPass() {
 		// as a subpass can only hold a single one
 		.pDepthStencilAttachment = &depthAttachmentRef,
 	};
+
+	VkSubpassDescription subpass1 = {
+		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachmentRef,
+
+		// Point to the resolve attachment for multisampling
+		.pResolveAttachments = &colorAttachmentResolveRef,
+
+		// We do not specify a count of depth-stencil attachments, 
+		// as a subpass can only hold a single one
+		.pDepthStencilAttachment = &depthAttachmentRef,
+	};
+
+	std::array<VkSubpassDescription, 2> subpasses{ subpass0, subpass1 };
 
 	VkSubpassDependency dependency = {
 		.srcSubpass = VK_SUBPASS_EXTERNAL,
@@ -645,8 +671,8 @@ void App::CreateRenderPass() {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		.attachmentCount = static_cast<uint32_t>(attachments.size()),
 		.pAttachments = attachments.data(),
-		.subpassCount = 1,
-		.pSubpasses = &subpass,
+		.subpassCount = static_cast<uint32_t>(subpasses.size()),
+		.pSubpasses = subpasses.data(),
 		.dependencyCount = 1,
 		.pDependencies = &dependency
 	};
@@ -721,9 +747,11 @@ void App::CreateMaterialDescriptorPool() {
 	LOG_MSG("Creating material descriptor pool", LogVerbosity::Info);
 
 	// ----- Material descriptor pool -----
+	constexpr uint32_t texSamplerCount = AssetManagerGlobals::AssetTraits<Texture>::config.maxCount;
+	constexpr uint32_t cubemapSamplerCount = AssetManagerGlobals::AssetTraits<CubemapTexture>::config.maxCount;
 	std::array<VkDescriptorPoolSize, 2> materialPoolSizes = {
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, AssetManagerGlobals::AssetTraits<Texture>::config.maxCount }, // texSampler[]
-		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 }, // denseIdToTexSlot[], materialParams[], denseIdToMatSlot[]
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, texSamplerCount + cubemapSamplerCount }, // texSampler[], cubemapSampler[]
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4 }, // denseIdToTexSlot[], denseIdToCubemapSlot[], materialParams[], denseIdToMatSlot[]
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = {
@@ -811,28 +839,6 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 	// -- Render Pass --
 	vkCmdBeginRenderPass(_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
-		auto lockedMesh = mTempMesh.lock();
-
-		// This is where the shader (pipeline) and vertex/index buffers get bound for this frame
-		if (lockedMesh) lockedMesh->BindMeshResources(_commandBuffer);
-
-		// Bind descriptor sets - this is for uniform buffers
-
-		// Eventually, this will only be called at the beginning of each sub-pass,
-		// where we also will switch pipeline layout
-		const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
-		std::array<VkDescriptorSet, 2> sets = { mFrameData[mCurrentFrame].GetDescriptorSet(), mMaterialData.GetDescriptorSet() };
-
-		vkCmdBindDescriptorSets(
-			_commandBuffer, 
-			VK_PIPELINE_BIND_POINT_GRAPHICS, 
-			layout, 
-			0,										// first descriptor set
-			static_cast<uint32_t>(sets.size()),		// number of descriptor sets
-			sets.data(),							// array of descriptor sets
-			0, nullptr								// no dynamic offsets
-		);
-
 		// Since viewport and scissor state are dynamic, we need to
 		// explicitly set them before we can issue a draw command
 		const VkExtent2D& swapchainExtent = mSwapchain->GetExtent();
@@ -852,8 +858,45 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 		};
 		vkCmdSetScissor(_commandBuffer, 0, 1, &scissor);
 
-		// This is where the actual draw call happens for our mesh
-		if (lockedMesh) lockedMesh->DrawMesh(_commandBuffer);
+		// Bind descriptor sets - this is for uniform buffers
+		auto bindDescriptorSetsToLayout = [&](const VkPipelineLayout& _layout) {
+			std::array<VkDescriptorSet, 2> sets = { mFrameData[mCurrentFrame].GetDescriptorSet(), mMaterialData.GetDescriptorSet() };
+
+			vkCmdBindDescriptorSets(
+				_commandBuffer,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				_layout,
+				0,										// first descriptor set
+				static_cast<uint32_t>(sets.size()),		// number of descriptor sets
+				sets.data(),							// array of descriptor sets
+				0, nullptr								// no dynamic offsets
+			);
+		};
+
+		// Subpass 0 - skybox
+		{
+			const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Skybox);
+			bindDescriptorSetsToLayout(layout);
+
+			if (auto lockedMesh = mSkyboxMesh.lock()) {
+				lockedMesh->BindMeshResources(_commandBuffer);
+				lockedMesh->DrawMesh(_commandBuffer);
+			}
+		}
+		// Subpass 1 - opaque geometry
+		vkCmdNextSubpass(_commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+		{
+			const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
+			bindDescriptorSetsToLayout(layout);
+
+			if (auto lockedMesh = mTempMesh.lock()) {
+				// This is where the shader (pipeline) and vertex/index buffers get bound for this frame
+				lockedMesh->BindMeshResources(_commandBuffer);
+
+				// This is where the actual draw call happens for our mesh
+				lockedMesh->DrawMesh(_commandBuffer);
+			}
+		}
 	}
 	vkCmdEndRenderPass(_commandBuffer);
 
@@ -901,7 +944,7 @@ void App::CleanupSwapchain(bool _isFinalCleanup) {
 
 void App::Start() {
 	mCamera = std::make_unique<FlyCamera>(
-		45.f,			// fov
+		80.f,			// fov
 		0.1f, 10.f,		// near-far clip
 		3.f,			// fly speed
 		1.5f			// look speed
@@ -909,8 +952,8 @@ void App::Start() {
 
 	const VkExtent2D& swapchainExtent = mSwapchain->GetExtent();
 	mCamera->SetViewSize({ swapchainExtent.width, swapchainExtent.height });
-	mCamera->transform.SetPosition({ 3, 3, 3 });
-	mCamera->transform.LookAt({ 0, 0, 0 });
+	mCamera->transform.SetPosition({ 0, -2, 2 });
+	mCamera->transform.LookAt({ 0, 0, 2 });
 }
 
 void App::MainLoop() {
