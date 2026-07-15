@@ -1,7 +1,7 @@
 type:shader{
 	type:shaderStages{
-		"assets/shaders/shader.vert.spv",1
-		"assets/shaders/shader.frag.spv",16
+		"assets/shaders/cached/shader.vert.spv",1
+		"assets/shaders/cached/shader.frag.spv",16
 	}
 	blendModel=0
 	shadingModel=1

@@ -1,7 +1,7 @@
 type:shader{
 	type:shaderStages{
-		"assets/shaders/skybox.vert.spv",1
-		"assets/shaders/skybox.frag.spv",16
+		"assets/shaders/cached/skybox.vert.spv",1
+		"assets/shaders/cached/skybox.frag.spv",16
 	}
 	blendModel=0
 	shadingModel=0
