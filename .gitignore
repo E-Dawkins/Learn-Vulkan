@@ -449,3 +449,6 @@ FodyWeavers.xsd
 
 # Explicitly ignore the 'saved' directory, as it will be for temporary (re-generated) files
 [Ss]aved/
+
+# Explicitly ignore any 'assets/.../cached' directories
+assets/*/cached
