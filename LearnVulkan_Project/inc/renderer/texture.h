@@ -12,7 +12,7 @@ protected:
 	uint32_t mMipLevels;
 
 public:
-	Texture(const std::filesystem::path& _filePath, VkImageCreateFlags _flags = 0, uint32_t _layers = 1, VkImageViewType _viewType = VK_IMAGE_VIEW_TYPE_2D);
+	Texture(const std::filesystem::path& _filePath, uint32_t _mipLevels = 0, VkImageCreateFlags _flags = 0, uint32_t _layers = 1, VkImageViewType _viewType = VK_IMAGE_VIEW_TYPE_2D);
 	~Texture();
 
 	inline const VkImageView& GetImageView() const { return mImageView; }
@@ -32,7 +32,7 @@ class CubemapTexture : public Texture
 
 public:
 	CubemapTexture(const std::filesystem::path& _filePath)
-		: Texture(_filePath, VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, 6, VK_IMAGE_VIEW_TYPE_CUBE) {}
+		: Texture(_filePath, 1, VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, 6, VK_IMAGE_VIEW_TYPE_CUBE) {}
 };
 
 class RuntimeTexture

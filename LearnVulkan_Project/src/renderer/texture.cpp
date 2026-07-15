@@ -5,7 +5,7 @@
 #include "utils/buffer_utils.h"
 #include "utils/image_utils.h"
 
-Texture::Texture(const std::filesystem::path& _filePath, VkImageCreateFlags _flags, uint32_t _layers, VkImageViewType _viewType)
+Texture::Texture(const std::filesystem::path& _filePath, uint32_t _mipLevels, VkImageCreateFlags _flags, uint32_t _layers, VkImageViewType _viewType)
 	: IAsset(_filePath)
 {
 	EnforceFileExtension(_filePath, ".texture");
@@ -24,9 +24,7 @@ Texture::Texture(const std::filesystem::path& _filePath, VkImageCreateFlags _fla
 		}
 	}
 
-	// mMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-
-	CreateImage(texPaths, _flags, 1, _layers);
+	CreateImage(texPaths, _flags, _mipLevels, _layers);
 
 	mImageView = Utils::ImageUtils::CreateImageView(mImage, _viewType, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mMipLevels, _layers);
 }
@@ -47,12 +45,20 @@ void Texture::CreateImage(const std::array<std::filesystem::path, 6>& _filePaths
 		throw std::runtime_error("Failed to load image for layer 0!");
 	}
 
+	// Treat '0' as 'use max mip levels'
+	if (_mipLevels == 0) {
+		mMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
+	}
+	else {
+		mMipLevels = _mipLevels;
+	}
+
 	Utils::ImageUtils::CreateImage(
 		texWidth,
 		texHeight,
 
 		_flags,
-		_mipLevels,
+		mMipLevels,
 		_layers,
 
 		VK_SAMPLE_COUNT_1_BIT,
@@ -75,11 +81,9 @@ void Texture::CreateImage(const std::array<std::filesystem::path, 6>& _filePaths
 		VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		_mipLevels,
+		mMipLevels,
 		_layers
 	);
-
-	mMipLevels = _mipLevels;
 
 	for (uint8_t i = 0; i < _layers; i++) {
 		if (i == 0) {
