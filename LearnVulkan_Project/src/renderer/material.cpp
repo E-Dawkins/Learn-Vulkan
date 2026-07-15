@@ -4,6 +4,9 @@
 #include "renderer/shader.h"
 #include "renderer/texture.h"
 #include "renderer/asset_manager.h"
+#include "utils/debug_logger.h"
+
+#define warn_user(s) LOG_MSG(std::format("No {} found on disk for {}", s, DebugStr()), LogVerbosity::Warning)
 
 Material::Material(const std::filesystem::path& _filepath) : IAsset(_filepath) {
 	EnforceFileExtension(_filepath, ".material");
@@ -48,10 +51,6 @@ const std::string Material::DebugStr() const {
 }
 
 void Material::CreateShaderFromAil(const AilReader& _reader) {
-	auto warn_user = [this](const std::string& _s) {
-		std::cerr << "WARNING: No " << _s << " found on disk for " << DebugStr() << "\n";
-	};
-
 	auto shaderNode = _reader.TryGetNode("shader");
 	if (!shaderNode) {
 		warn_user("shader params");
@@ -115,10 +114,6 @@ void Material::CreateShaderFromAil(const AilReader& _reader) {
 }
 
 void Material::FillParamsFromAil(const AilReader& _reader) {
-	auto warn_user = [this](const std::string& _s) {
-		std::cerr << "WARNING: No " << _s << " found on disk for " << DebugStr() << "\n";
-	};
-
 	if (!params) {
 		params = new MaterialParams();
 	}
