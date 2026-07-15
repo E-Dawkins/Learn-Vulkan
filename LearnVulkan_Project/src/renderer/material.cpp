@@ -148,6 +148,25 @@ void Material::FillParamsFromAil(const AilReader& _reader) {
 		warn_user("stableTexIds");
 	}
 
+	if (auto stableCubemapIdsNode = paramsNode->TryGetSubnode("stableCubemapIds")) {
+		for (size_t i = 0; i < 8; i++) {
+			auto idNode = stableCubemapIdsNode->TryGetSubnode(i);
+			if (!idNode) continue;
+
+			AssetDefs::StableId stableId = idNode->GetAsSizetCasted<AssetDefs::StableId>();
+
+			const AssetManager& manager = AssetManager::GetInstance();
+			if (manager.IsAssetLoaded(stableId)) {
+				if (auto tex = manager.GetAsset<CubemapTexture>(stableId).lock()) {
+					params->denseCubemapIds[i] = tex->GetDenseId();
+				}
+			}
+		}
+	}
+	else {
+		warn_user("stableCubemapIds");
+	}
+
 	if (auto colorVarsNode = paramsNode->TryGetSubnode("colorVars")) {
 		for (size_t i = 0; i < 8; i++) {
 			auto colorNode = colorVarsNode->TryGetSubnode(i);

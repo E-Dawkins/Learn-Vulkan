@@ -3,14 +3,19 @@
 
 #include <array>
 
-enum class BlendModel
+enum class BlendModel : uint8_t
 {
-	Opaque
+	Opaque,
+
+	Count
 };
 
-enum class ShadingModel
+enum class ShadingModel : uint8_t
 {
-	Unlit
+	Skybox,
+	Unlit,
+
+	Count
 };
 
 enum class DescriptorSet

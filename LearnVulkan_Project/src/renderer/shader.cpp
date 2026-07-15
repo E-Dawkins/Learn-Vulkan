@@ -144,7 +144,7 @@ void Shader::CreatePipeline(const std::vector<VkPipelineShaderStageCreateInfo>& 
 		.pColorBlendState = &preset.colorBlendState,
 		.pDynamicState = &dynamicState,
 		.layout = pipelineLayoutManagerInst.GetLayoutForModel(mBlendModel, mShadingModel),
-		.renderPass = appInst.GetRenderPass(static_cast<size_t>(preset.shading)),
+		.renderPass = appInst.GetRenderPass(static_cast<size_t>(preset.blend)),
 		.subpass = static_cast<uint32_t>(preset.shading),
 	};
 

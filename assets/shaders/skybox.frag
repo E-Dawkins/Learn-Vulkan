@@ -31,8 +31,7 @@ layout(push_constant) uniform PushConstants {
 	layout(offset = 64) uint denseMatSlotId;
 } pc;
 
-layout (location = 0) in vec3 iColor;
-layout (location = 1) in vec2 iTexCoord;
+layout (location = 0) in vec3 iDirection;
 
 layout (location = 0) out vec4 oColor;
 
@@ -40,11 +39,10 @@ void main() {
 	uint matSlot = matSlots[pc.denseMatSlotId];
 	MaterialParams params = matParams[matSlot];
 
-	uint texSlot = texSlots[params.denseTexIds[0]];
-	vec4 texColor = texture(textures[nonuniformEXT(texSlot)], iTexCoord);
+	uint cubemapSlot = cubemapSlots[params.denseCubemapIds[0]];
 
-	int colorIndex = params.intVars[0];
-	vec4 selectedColor = params.colorVars[colorIndex];
-
-	oColor = vec4(iColor * texColor.rgb, 1.0) * selectedColor;
+	vec3 dir = normalize(iDirection);
+	vec4 texColor = texture(cubemaps[nonuniformEXT(cubemapSlot)], dir);
+	
+	oColor = vec4(texColor.rgb, 1.0);
 }

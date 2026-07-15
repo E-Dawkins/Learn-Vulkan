@@ -33,11 +33,15 @@ void PipelineLayoutManager::OnCleanup() {
 }
 
 void PipelineLayoutManager::InitPresets() {
-	// Opaque - Unlit
+	uint8_t maxNumPresets = static_cast<uint8_t>(BlendModel::Count) * static_cast<uint8_t>(ShadingModel::Count);
+
+	mPresets.reserve(maxNumPresets);
+
+	// Opaque - Skybox
 	mPresets.emplace_back(PipelinePreset{
 		.blend = BlendModel::Opaque,
-		.shading = ShadingModel::Unlit,
-		.colorBlendAttachment = { // no blending for now
+		.shading = ShadingModel::Skybox,
+		.colorBlendAttachment = VkPipelineColorBlendAttachmentState{ // no blending for now
 			.blendEnable = VK_FALSE,
 			.colorWriteMask =
 				VK_COLOR_COMPONENT_R_BIT |
@@ -45,7 +49,37 @@ void PipelineLayoutManager::InitPresets() {
 				VK_COLOR_COMPONENT_B_BIT |
 				VK_COLOR_COMPONENT_A_BIT,
 		},
-		.depthStencilState = {
+		.depthStencilState = VkPipelineDepthStencilStateCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+			.depthTestEnable = VK_TRUE,
+			.depthWriteEnable = VK_FALSE,
+			.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+			.depthBoundsTestEnable = VK_FALSE,
+			.stencilTestEnable = VK_FALSE,
+		}
+	});
+
+	// TODO: somehow avoid manually setting blend state
+	mPresets.back().colorBlendState = VkPipelineColorBlendStateCreateInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.logicOpEnable = VK_FALSE,
+		.attachmentCount = 1,
+		.pAttachments = &mPresets.back().colorBlendAttachment,
+	};
+
+	// Opaque - Unlit
+	mPresets.emplace_back(PipelinePreset{
+		.blend = BlendModel::Opaque,
+		.shading = ShadingModel::Unlit,
+		.colorBlendAttachment = VkPipelineColorBlendAttachmentState{ // no blending for now
+			.blendEnable = VK_FALSE,
+			.colorWriteMask =
+				VK_COLOR_COMPONENT_R_BIT |
+				VK_COLOR_COMPONENT_G_BIT |
+				VK_COLOR_COMPONENT_B_BIT |
+				VK_COLOR_COMPONENT_A_BIT,
+		},
+		.depthStencilState = VkPipelineDepthStencilStateCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 			.depthTestEnable = VK_TRUE,
 			.depthWriteEnable = VK_TRUE,
@@ -55,12 +89,11 @@ void PipelineLayoutManager::InitPresets() {
 		}
 	});
 
-	auto& back = mPresets.back();
-	back.colorBlendState = {
+	mPresets.back().colorBlendState = VkPipelineColorBlendStateCreateInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.logicOpEnable = VK_FALSE,
 		.attachmentCount = 1,
-		.pAttachments = &back.colorBlendAttachment,
+		.pAttachments = &mPresets.back().colorBlendAttachment,
 	};
 }
 
@@ -77,7 +110,6 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 	// Set 1 - material system
 	setLayouts.emplace_back(DescriptorSetLayout{
 		.layoutBindings{
-			//{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT }, // materialParams[]
 			// texSamplers[]
 			{
 				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
@@ -89,6 +121,18 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 			{ 
 				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 
 				VK_SHADER_STAGE_FRAGMENT_BIT 
+			},
+			// cubemapSamplers[]
+			{
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				VK_SHADER_STAGE_FRAGMENT_BIT,
+				AssetManagerGlobals::AssetTraits<CubemapTexture>::config.maxCount,
+				VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT, // binding flags
+			},
+			// denseIdToCubemapSlot[]
+			{
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				VK_SHADER_STAGE_FRAGMENT_BIT
 			},
 			// materialParams[]
 			{

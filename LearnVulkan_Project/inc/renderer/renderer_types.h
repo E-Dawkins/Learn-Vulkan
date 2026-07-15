@@ -3,6 +3,7 @@
 #include "utils/type_defs.h"
 
 class Texture;
+class CubemapTexture;
 class Material;
 
 struct QueueFamilyIndices
@@ -64,8 +65,13 @@ class MaterialData
 {
 private:
 	VkDescriptorSet mDescriptorSet;
+
 	std::unordered_map<AssetDefs::TextureSlot, VkSampler> mTextureSlotToSampler;
 	Utils::BufferUtils::Ssbo mDenseIdToTextureSlot;
+
+	std::unordered_map<AssetDefs::CubemapSlot, VkSampler> mCubemapSlotToSampler;
+	Utils::BufferUtils::Ssbo mDenseIdToCubemapSlot;
+
 	Utils::BufferUtils::Ssbo mMaterialParamsBuffer;
 	Utils::BufferUtils::Ssbo mDenseIdToMaterialSlot;
 
@@ -75,7 +81,8 @@ public:
 
 	void OnTextureLoaded(std::weak_ptr<Texture> _tex, AssetDefs::DenseId _denseId, AssetDefs::TextureSlot _texSlot);
 	void OnTextureUnloaded(AssetDefs::DenseId _denseId);
-	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
+	void OnCubemapLoaded(std::weak_ptr<CubemapTexture> _tex, AssetDefs::DenseId _denseId, AssetDefs::CubemapSlot _texSlot);
+	void OnCubemapUnloaded(AssetDefs::DenseId _denseId);
 	void OnMaterialLoaded(std::weak_ptr<Material> _mat, AssetDefs::DenseId _denseId, AssetDefs::MaterialSlot _matSlot);
 	void OnMaterialUnloaded(AssetDefs::DenseId _denseId);
 
@@ -84,4 +91,6 @@ public:
 private:
 	void InitBuffers();
 	void CreateDescriptorSet(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool);
+	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
+	void CreateCubemapSamplerForSlot(AssetDefs::CubemapSlot _texSlot);
 };

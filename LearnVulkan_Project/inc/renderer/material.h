@@ -8,6 +8,7 @@ class Shader;
 struct MaterialParams
 {
 	AssetDefs::DenseId denseTexIds[8];
+	AssetDefs::DenseId denseCubemapIds[8];
 	glm::vec4 colorVars[8];
 	int32_t intVars[8];
 };

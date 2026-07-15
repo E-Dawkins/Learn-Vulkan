@@ -10,5 +10,6 @@ namespace AssetDefs {
 	// 32-bit anyway, which can break indexing on the shader-side
 	typedef uint32_t DenseId;
 	typedef uint32_t TextureSlot;
+	typedef uint32_t CubemapSlot;
 	typedef uint32_t MaterialSlot;
 }

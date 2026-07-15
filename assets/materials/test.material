@@ -4,7 +4,7 @@ type:shader{
 		"assets/shaders/shader.frag.spv",16
 	}
 	blendModel=0
-	shadingModel=0
+	shadingModel=1
 	type:rasterizerState{
 		polygonMode=0
 		cullMode=2
@@ -13,7 +13,7 @@ type:shader{
 }
 type:materialParams{
 	type:stableTexIds{
-		15366719586664209429
+		14204911228592447469
 	}
 	type:colorVars{
 		1.0,1.0,1.0,1.0

@@ -1,0 +1,18 @@
+type:shader{
+	type:shaderStages{
+		"assets/shaders/skybox.vert.spv",1
+		"assets/shaders/skybox.frag.spv",16
+	}
+	blendModel=0
+	shadingModel=0
+	type:rasterizerState{
+		polygonMode=0
+		cullMode=1
+		lineWidth=1.0
+	}
+}
+type:materialParams{
+	type:stableCubemapIds{
+		7517631111222649972
+	}
+}
