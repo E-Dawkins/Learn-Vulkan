@@ -87,6 +87,7 @@ private:
 	void Event_IterateTextures();
 	void Event_IterateColors();
 	void Event_ToggleTextureLoad();
+	void Event_IterateSkyboxes();
 
 	void InitVulkan();
 	void CreateInstance();

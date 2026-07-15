@@ -78,11 +78,16 @@ void App::SetupInput() {
 		inputInst.AddInputEvent(Input::MOUSE_SCROLL, InputState::MOUSE_AXIS, glm::vec2(1), MAKE_CB_1(App::Event_MouseScroll, this));
 	}
 
-	// Mouse buttons
+	// Mesh inputs
 	{
 		inputInst.AddInputEvent(Input::MOUSE_BUTTON_LEFT, InputState::PRESS, MAKE_CB(App::Event_IterateTextures, this));
 		inputInst.AddInputEvent(Input::MOUSE_BUTTON_RIGHT, InputState::PRESS, MAKE_CB(App::Event_IterateColors, this));
 		inputInst.AddInputEvent(Input::MOUSE_BUTTON_MIDDLE, InputState::PRESS, MAKE_CB(App::Event_ToggleTextureLoad, this));
+	}
+
+	// Skybox inputs
+	{
+		inputInst.AddInputEvent(Input::ONE, InputState::PRESS, MAKE_CB(App::Event_IterateSkyboxes, this));
 	}
 }
 
@@ -152,6 +157,14 @@ void App::Event_ToggleTextureLoad() {
 	}
 }
 
+void App::Event_IterateSkyboxes() {
+	if (auto testMaterial = AssetManager::GetInstance().GetAsset<Material>("materials\\skybox.material").lock()) {
+		// Grab params* from material asset, and directly access its elements
+		int32_t& intVar = testMaterial->params->intVars[0];
+		intVar = (intVar + 1) % 3;
+	}
+}
+
 void App::InitVulkan() {
 	CreateInstance();
 	SetupDebugMessenger();
@@ -203,7 +216,8 @@ void App::InitVulkan() {
 	managerInst.GetLoadCallback<Material>() = std::bind(&MaterialData::OnMaterialLoaded, &mMaterialData, _1, _2, _3);
 	managerInst.GetUnloadCallback<Material>() = std::bind(&MaterialData::OnMaterialUnloaded, &mMaterialData, _1);
 
-	managerInst.LoadAsset<CubemapTexture>("assets\\textures\\skybox.texture");
+	managerInst.LoadAsset<CubemapTexture>("assets\\textures\\skybox_debug.texture");
+	managerInst.LoadAsset<CubemapTexture>("assets\\textures\\skybox_clouds.texture");
 
 	managerInst.LoadAsset<Texture>("assets\\textures\\default_texture.texture");
 	managerInst.LoadAsset<Texture>("assets\\textures\\viking_room.texture");

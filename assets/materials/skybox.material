@@ -13,6 +13,13 @@ type:shader{
 }
 type:materialParams{
 	type:stableCubemapIds{
-		7517631111222649972
+		16326191710798834984
+		17194491041387710459
+	}
+	type:colorVars{
+		0.6,0.2,0.3,1.0
+	}
+	type:intVars{
+		0
 	}
 }

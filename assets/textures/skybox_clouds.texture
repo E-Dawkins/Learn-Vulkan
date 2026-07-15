@@ -1,0 +1,8 @@
+type:texPaths{
+	right="assets/textures/skybox/skybox_clouds_right.png"
+	left="assets/textures/skybox/skybox_clouds_left.png"
+	top="assets/textures/skybox/skybox_clouds_top.png"
+	bottom="assets/textures/skybox/skybox_clouds_bottom.png"
+	front="assets/textures/skybox/skybox_clouds_front.png"
+	back="assets/textures/skybox/skybox_clouds_back.png"
+}
