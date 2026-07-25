@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "renderer/camera.h"
+#include "renderer/mesh_instance.h"
 #include "renderer/renderer_types.h"
 #include "renderer/swapchain.h"
 #include "renderer/texture.h"
@@ -19,9 +20,6 @@
 #include "utils/buffer_utils.h"
 #include "utils/input_manager.h"
 #include "utils/type_defs.h"
-
-class Material;
-class Mesh;
 
 class App : public ISingleton<App>
 {
@@ -48,8 +46,11 @@ private:
 	RuntimeTexture mDepthTexture;
 	RuntimeTexture mColorTexture;
 
-	std::weak_ptr<Mesh> mSkyboxMesh;
-	std::weak_ptr<Mesh> mTempMesh;
+	VkDescriptorPool mMeshDescriptorPool;
+	MeshData mMeshData;
+
+	std::unique_ptr<MeshInstance> mSkyboxMesh;
+	std::unique_ptr<MeshInstance> mTempMesh;
 	std::unique_ptr<FlyCamera> mCamera;
 
 	bool mFramebufferResized = false;
@@ -66,6 +67,7 @@ public:
 		return mRenderPasses[_index];
 	}
 	inline const Window& GetWindow() const { return *mWindow; }
+	inline MeshData& GetMeshData() { return mMeshData; } // TODO: remove this
 
 	VkCommandBuffer BeginSingleTimeCommands() const;
 	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;
@@ -110,6 +112,7 @@ private:
 	void CreateDepthResources();
 
 	void CreateMaterialDescriptorPool();
+	void CreateMeshDescriptorPool();
 
 	void RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) const;
 	void RecreateSwapchain();

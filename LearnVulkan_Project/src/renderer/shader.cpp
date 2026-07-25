@@ -1,7 +1,7 @@
 #include "pch.h"
 
 #include "app.h"
-#include "renderer/mesh.h"
+#include "renderer/mesh_asset.h"
 #include "renderer/shader.h"
 
 Shader::Shader(const std::vector<ShaderStage>& _stages, BlendModel _blendModel, ShadingModel _shadingModel, RasterizerState _rasterizerState)

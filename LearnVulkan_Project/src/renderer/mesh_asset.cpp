@@ -1,9 +1,7 @@
 #include "pch.h"
-#include "renderer/mesh.h"
+#include "renderer/mesh_asset.h"
 
 #include "app.h"
-#include "renderer/material.h"
-#include "renderer/shader.h"
 #include "utils/buffer_utils.h"
 
 VkVertexInputBindingDescription Vertex::GetBindingDescription() {
@@ -50,7 +48,7 @@ bool Vertex::operator == (const Vertex& _other) const {
 	return pos == _other.pos && color == _other.color && texCoord == _other.texCoord;
 }
 
-Mesh::Mesh(const std::filesystem::path& _filePath) : IAsset(_filePath) {
+MeshAsset::MeshAsset(const std::filesystem::path& _filePath) : IAsset(_filePath) {
 	EnforceFileExtension(_filePath, ".mesh");
 
 	AilReader reader;
@@ -66,7 +64,7 @@ Mesh::Mesh(const std::filesystem::path& _filePath) : IAsset(_filePath) {
 	CreateIndexBuffer();
 }
 
-Mesh::~Mesh() {
+MeshAsset::~MeshAsset() {
 	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
 
 	vkDestroyBuffer(logicalDevice, mIndexBuffer, nullptr);
@@ -76,40 +74,7 @@ Mesh::~Mesh() {
 	vkFreeMemory(logicalDevice, mVertexBufferMemory, nullptr);
 }
 
-void Mesh::SetMaterial(std::weak_ptr<Material> _material) {
-	mMaterial = _material;
-}
-
-void Mesh::BindMeshResources(const VkCommandBuffer& _commandBuffer) const {
-	auto lockedMaterial = mMaterial.lock();
-	if (!lockedMaterial) {
-		return;
-	}
-
-	lockedMaterial->BindMaterialResources(_commandBuffer);
-
-	// Bind buffers
-	static const VkDeviceSize zeroOffset = 0;
-
-	vkCmdBindVertexBuffers(_commandBuffer, 0, 1, &mVertexBuffer, &zeroOffset);
-	vkCmdBindIndexBuffer(_commandBuffer, mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-	vkCmdPushConstants(
-		_commandBuffer,
-		lockedMaterial->GetShader().GetLayoutForShader(),
-		VK_SHADER_STAGE_VERTEX_BIT,
-		0, // TODO - make this offset dynamic, not hard-coded
-		sizeof(glm::mat4),
-		&transform.GetMatrix()
-	);
-}
-
-void Mesh::DrawMesh(const VkCommandBuffer& _commandBuffer) const {
-	// Draw the vertices in the vertex buffer, using the index buffer
-	vkCmdDrawIndexed(_commandBuffer, static_cast<uint32_t>(mIndices.size()), 1, 0, 0, 0);
-}
-
-void Mesh::LoadFromFile(const std::filesystem::path& _filePath) {
+void MeshAsset::LoadFromFile(const std::filesystem::path& _filePath) {
 	EnforceFileExtension(_filePath, ".obj");
 
 	tinyobj::attrib_t attrib;
@@ -150,7 +115,7 @@ void Mesh::LoadFromFile(const std::filesystem::path& _filePath) {
 	}
 }
 
-void Mesh::CreateVertexBuffer() {
+void MeshAsset::CreateVertexBuffer() {
 	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
 
 	VkDeviceSize bufferSize = sizeof(mVertices[0]) * mVertices.size();
@@ -185,7 +150,7 @@ void Mesh::CreateVertexBuffer() {
 	vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
 }
 
-void Mesh::CreateIndexBuffer() {
+void MeshAsset::CreateIndexBuffer() {
 	const VkDevice& logicalDevice = App::GetInstance().GetLogicalDevice();
 
 	VkDeviceSize bufferSize = sizeof(mIndices[0]) * mIndices.size();

@@ -9,10 +9,7 @@
 
 #include "interfaces/asset.h"
 #include "interfaces/file_reader.h"
-#include "math/transform.h"
 #include "utils/hash_utils.h"
-
-class Material;
 
 struct Vertex
 {
@@ -40,10 +37,9 @@ namespace std {
 	};
 }
 
-class Mesh : IFileReader, public IAsset
+class MeshAsset : IFileReader, public IAsset
 {
-public:
-	Transform transform;
+	friend class MeshInstance;
 
 private:
 	std::vector<Vertex> mVertices;
@@ -53,16 +49,9 @@ private:
 	VkBuffer mIndexBuffer;
 	VkDeviceMemory mIndexBufferMemory;
 
-	std::weak_ptr<Material> mMaterial;
-
 public:
-	Mesh(const std::filesystem::path& _filePath);
-	~Mesh();
-
-	void SetMaterial(std::weak_ptr<Material> _material);
-
-	void BindMeshResources(const VkCommandBuffer& _commandBuffer) const;
-	void DrawMesh(const VkCommandBuffer& _commandBuffer) const;
+	MeshAsset(const std::filesystem::path& _filePath);
+	~MeshAsset();
 
 private:
 	void LoadFromFile(const std::filesystem::path& _filePath);

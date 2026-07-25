@@ -323,7 +323,7 @@ void MaterialData::CreateDescriptorSet(VkDevice _logicalDevice, VkDescriptorPool
 
 	// Initial SSBO mappings
 	mDenseIdToTextureSlot.WriteToDescriptorSet(mDescriptorSet, 1);
-	mDenseIdToTextureSlot.WriteToDescriptorSet(mDescriptorSet, 3);
+	mDenseIdToCubemapSlot.WriteToDescriptorSet(mDescriptorSet, 3);
 	mMaterialParamsBuffer.WriteToDescriptorSet(mDescriptorSet, 4);
 	mDenseIdToMaterialSlot.WriteToDescriptorSet(mDescriptorSet, 5);
 }
@@ -420,4 +420,68 @@ void MaterialData::CreateCubemapSamplerForSlot(AssetDefs::CubemapSlot _texSlot) 
 	if (vkCreateSampler(App::GetInstance().GetLogicalDevice(), &samplerInfo, nullptr, &mCubemapSlotToSampler[_texSlot]) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create cubemap sampler!");
 	}
+}
+
+void MeshData::Init(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool) {
+	InitBuffers();
+	CreateDescriptorSet(_logicalDevice, _descriptorPool);
+}
+
+void MeshData::Reset() {
+	mInstanceTransforms.Reset();
+	mInstToTransformIndex.Reset();
+}
+
+void MeshData::MapFreeTransform(RenderTransform& _value, uint32_t& _outIndex) {
+	// Grab next free transform index
+	_outIndex = mFreeTransforms.top();
+	mFreeTransforms.pop();
+
+	// Set value
+	glm::mat4& newValue = mInstanceTransforms.GetElement<glm::mat4>(_outIndex);
+	_value.SetMappedMatrix(newValue);
+}
+
+void MeshData::BindTransformIndices(const std::vector<uint32_t>& _transformIndices) {
+	// Set each instance index to correct transform index
+	for (size_t i = 0; i < _transformIndices.size(); i++) {
+		uint32_t& index = mInstToTransformIndex.GetElement<uint32_t>(i);
+		index = _transformIndices[i];
+	}
+}
+
+void MeshData::InitBuffers() {
+	LOG_MSG("Initializing SSBO's", LogVerbosity::Info);
+
+	// These are test values, real apps would have WAY higher numbers
+	constexpr uint32_t maxTransformCount = 100;
+
+	mInstanceTransforms.Init(sizeof(glm::mat4) * maxTransformCount);
+	mInstToTransformIndex.Init(sizeof(uint32_t) * maxTransformCount);
+
+	for (uint32_t i = 0; i < maxTransformCount; i++) {
+		uint32_t current = maxTransformCount - i - 1;
+		mFreeTransforms.push(current);
+	}
+}
+
+void MeshData::CreateDescriptorSet(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool) {
+	LOG_MSG("Creating mesh descriptor set", LogVerbosity::Info);
+
+	const VkDescriptorSetLayout& layoutPreset = PipelineLayoutManager::GetInstance().GetDescriptorSetLayout(DescriptorSet::Mesh);
+
+	VkDescriptorSetAllocateInfo allocInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = _descriptorPool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &layoutPreset
+	};
+
+	if (vkAllocateDescriptorSets(_logicalDevice, &allocInfo, &mDescriptorSet) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to allocate mesh descriptor set!");
+	}
+
+	// Initial SSBO mappings
+	mInstanceTransforms.WriteToDescriptorSet(mDescriptorSet, 0);
+	mInstToTransformIndex.WriteToDescriptorSet(mDescriptorSet, 1);
 }

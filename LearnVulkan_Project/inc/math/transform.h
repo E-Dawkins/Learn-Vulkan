@@ -9,7 +9,7 @@ constexpr glm::vec3 gWorldUp = { 0, 0, 1 };
 
 struct Transform
 {
-private:
+protected:
 	glm::vec3 mPosition{ 0, 0, 0 };
 	glm::quat mRotation{ glm::vec3{ 0, 0, 0 } };
 	glm::vec3 mScale{ 1, 1, 1 };
@@ -18,17 +18,9 @@ private:
 	glm::vec3 mForward{ 0, 1, 0 };
 	glm::vec3 mUp{ 0, 0, 1 };
 
-	// TODO - remove cached matrix as it costs 64 bytes
-	// of extra memory for every transform instance
-	
-	// Note to self: 'mutable' is so we can manipulate
-	// these in const context within 'GetMatrix'
-	mutable glm::mat4 mMatrix;
-	mutable bool mDirty = true;
+	bool mDirty = true;
 
 public:
-	const glm::mat4& GetMatrix() const;
-
 	inline const glm::vec3& GetPosition() const { return mPosition; }
 	inline const glm::quat& GetRotation() const { return mRotation; }
 	inline const glm::vec3& GetScale() const { return mScale; }
@@ -52,4 +44,14 @@ public:
 
 private:
 	void RecalculateAxisVectors();
+};
+
+struct RenderTransform : public Transform
+{
+private:
+	void* mMappedMatrix = nullptr; // points to where mat4 is stored in gpu memory
+
+public:
+	void SetMappedMatrix(glm::mat4& _matrixMapping);
+	void UpdateMappedMatrix();
 };

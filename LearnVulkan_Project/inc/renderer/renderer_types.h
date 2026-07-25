@@ -2,9 +2,13 @@
 #include "utils/buffer_utils.h"
 #include "utils/type_defs.h"
 
+#include <stack>
+
 class Texture;
 class CubemapTexture;
 class Material;
+
+struct RenderTransform;
 
 struct QueueFamilyIndices
 {
@@ -93,4 +97,28 @@ private:
 	void CreateDescriptorSet(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool);
 	void CreateTextureSamplerForSlot(AssetDefs::TextureSlot _texSlot);
 	void CreateCubemapSamplerForSlot(AssetDefs::CubemapSlot _texSlot);
+};
+
+class MeshData
+{
+private:
+	VkDescriptorSet mDescriptorSet;
+
+	Utils::BufferUtils::Ssbo mInstanceTransforms;
+	Utils::BufferUtils::Ssbo mInstToTransformIndex;
+	std::stack<uint32_t> mFreeTransforms;
+
+public:
+	void Init(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool);
+	void Reset();
+
+	void MapFreeTransform(RenderTransform& _value, uint32_t& _outIndex);
+	void BindTransformIndices(const std::vector<uint32_t>& _transformIndices);
+
+	inline const VkDescriptorSet& GetDescriptorSet() const { return mDescriptorSet; }
+
+private:
+	void InitBuffers();
+	void CreateDescriptorSet(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool);
+
 };

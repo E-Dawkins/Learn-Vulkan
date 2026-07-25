@@ -149,11 +149,20 @@ void PipelineLayoutManager::CreateDescriptorSetLayouts() {
 	});
 
 	// Set 2 - mesh data
-	//setLayouts.emplace_back(DescriptorSetLayout{
-	//	.layoutBindings{
-	//		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }, // meshTransform
-	//	}
-	//});
+	setLayouts.emplace_back(DescriptorSetLayout{
+		.layoutBindings{
+			// instanceTransforms[]
+			{
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				VK_SHADER_STAGE_VERTEX_BIT
+			},
+			// instToTransformIndex[]
+			{
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				VK_SHADER_STAGE_VERTEX_BIT
+			}
+		}
+	});
 
 	for (const auto& layout : setLayouts) {
 		std::vector<VkDescriptorSetLayoutBinding> layoutBindings;

@@ -22,7 +22,7 @@ enum class DescriptorSet
 {
 	Global,
 	Material,
-	//Mesh
+	Mesh
 };
 
 struct PipelinePreset

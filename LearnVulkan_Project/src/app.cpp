@@ -5,7 +5,7 @@
 
 #include "app.h"
 #include "renderer/material.h"
-#include "renderer/mesh.h"
+#include "renderer/mesh_asset.h"
 #include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
@@ -202,6 +202,10 @@ void App::InitVulkan() {
 	CreateMaterialDescriptorPool();
 	mMaterialData.Init(mLogicalDevice, mMaterialDescriptorPool);
 
+	// Init mesh data
+	CreateMeshDescriptorPool();
+	mMeshData.Init(mLogicalDevice, mMeshDescriptorPool);
+
 	// Create/load all our textures
 	// IT DOES NOT MATTER THE LOAD ORDER ANYMORE, THE STABLE ID => DENSE ID WORKS! :)
 	using namespace std::placeholders;
@@ -223,16 +227,31 @@ void App::InitVulkan() {
 	managerInst.LoadAsset<Texture>("assets\\textures\\viking_room.texture");
 	managerInst.LoadAsset<Texture>("assets\\textures\\statue.texture");
 
-	mSkyboxMesh = managerInst.LoadAsset<Mesh>("assets\\models\\primitives\\cube.mesh");
-	if (auto meshLock = mSkyboxMesh.lock()) {
+	{
+		auto meshAsset = managerInst.LoadAsset<MeshAsset>("assets\\models\\primitives\\cube.mesh");
+		mSkyboxMesh = std::make_unique<MeshInstance>(meshAsset);
+		mSkyboxMesh->AddInstance(RenderTransform());
+
 		auto skyboxMat = managerInst.LoadAsset<Material>("assets\\materials\\skybox.material");
-		meshLock->SetMaterial(skyboxMat);
+		mSkyboxMesh->SetMaterial(skyboxMat);
 	}
 
-	mTempMesh = managerInst.LoadAsset<Mesh>("assets\\models\\viking_room.mesh");
-	if (auto meshLock = mTempMesh.lock()) {
+	{
+		auto meshAsset = managerInst.LoadAsset<MeshAsset>("assets\\models\\viking_room.mesh");
+		mTempMesh = std::make_unique<MeshInstance>(meshAsset);
+
+		int gridExtent = 3, spacing = 2;
+
+		RenderTransform t;
+		for (int i = -gridExtent; i <= gridExtent; i++) {
+			for (int j = -gridExtent; j <= gridExtent; j++) {
+				t.SetPosition({ i * spacing, j * spacing, 0 });
+				mTempMesh->AddInstance(t);
+			}
+		}
+
 		auto testMat = managerInst.LoadAsset<Material>("assets\\materials\\test.material");
-		meshLock->SetMaterial(testMat);
+		mTempMesh->SetMaterial(testMat);
 	}
 }
 
@@ -784,6 +803,29 @@ void App::CreateMaterialDescriptorPool() {
 	}
 }
 
+void App::CreateMeshDescriptorPool() {
+	LOG_MSG("Creating mesh descriptor pool", LogVerbosity::Info);
+
+	std::array<VkDescriptorPoolSize, 1> meshPoolSizes = {
+		VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 }, // instanceTransforms[], instToTransformIndex[]
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+
+		// Allow updating sets after 'vkBindDescriptorSets'
+		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+
+		.maxSets = 1,
+		.poolSizeCount = static_cast<uint32_t>(meshPoolSizes.size()),
+		.pPoolSizes = meshPoolSizes.data(),
+	};
+
+	if (vkCreateDescriptorPool(mLogicalDevice, &poolInfo, nullptr, &mMeshDescriptorPool) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create mesh descriptor pool!");
+	}
+}
+
 VkCommandBuffer App::BeginSingleTimeCommands() const {
 	VkCommandBufferAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -874,7 +916,11 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 
 		// Bind descriptor sets - this is for uniform buffers
 		auto bindDescriptorSetsToLayout = [&](const VkPipelineLayout& _layout) {
-			std::array<VkDescriptorSet, 2> sets = { mFrameData[mCurrentFrame].GetDescriptorSet(), mMaterialData.GetDescriptorSet() };
+			std::array<VkDescriptorSet, 3> sets = { 
+				mFrameData[mCurrentFrame].GetDescriptorSet(), 
+				mMaterialData.GetDescriptorSet(),
+				mMeshData.GetDescriptorSet()
+			};
 
 			vkCmdBindDescriptorSets(
 				_commandBuffer,
@@ -892,10 +938,8 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 			const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Skybox);
 			bindDescriptorSetsToLayout(layout);
 
-			if (auto lockedMesh = mSkyboxMesh.lock()) {
-				lockedMesh->BindMeshResources(_commandBuffer);
-				lockedMesh->DrawMesh(_commandBuffer);
-			}
+			mSkyboxMesh->BindMeshResources(_commandBuffer);
+			mSkyboxMesh->DrawMesh(_commandBuffer);
 		}
 		// Subpass 1 - opaque geometry
 		vkCmdNextSubpass(_commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
@@ -903,13 +947,8 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 			const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
 			bindDescriptorSetsToLayout(layout);
 
-			if (auto lockedMesh = mTempMesh.lock()) {
-				// This is where the shader (pipeline) and vertex/index buffers get bound for this frame
-				lockedMesh->BindMeshResources(_commandBuffer);
-
-				// This is where the actual draw call happens for our mesh
-				lockedMesh->DrawMesh(_commandBuffer);
-			}
+			mTempMesh->BindMeshResources(_commandBuffer);
+			mTempMesh->DrawMesh(_commandBuffer);
 		}
 	}
 	vkCmdEndRenderPass(_commandBuffer);
@@ -1104,12 +1143,10 @@ void App::DrawFrame(float _deltaTime) {
 
 void App::UpdateUniformBuffer(uint32_t _currentImage, float _deltaTime) {
 	// TODO - move this somewhere else now that mesh has its' own transform (matrix)
-	if (auto lockedMesh = mTempMesh.lock()) {
-		lockedMesh->transform.AddRotation(glm::angleAxis(
-			_deltaTime * glm::radians(90.f),	// rotation (in radians)
-			gWorldUp							// axis of rotation
-		));
-	}
+	mTempMesh->GetTransform(mTempMesh->GetInstanceCount() / 2).AddRotation(glm::angleAxis(
+		_deltaTime * glm::radians(90.f),	// rotation (in radians)
+		gWorldUp							// axis of rotation
+	));
 
 	assert(mCamera);
 
@@ -1135,9 +1172,11 @@ void App::OnCleanup() {
 
 	AssetManager::Shutdown();
 
+	mMeshData.Reset();
 	mMaterialData.Reset();
 	mFrameData.clear();
 
+	vkDestroyDescriptorPool(mLogicalDevice, mMeshDescriptorPool, nullptr);
 	vkDestroyDescriptorPool(mLogicalDevice, mMaterialDescriptorPool, nullptr);
 
 	for (size_t i = 0; i < mRenderPasses.size(); i++) {

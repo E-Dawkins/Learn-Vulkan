@@ -8,7 +8,7 @@
 #include <stack>
 
 #include "renderer/material.h"
-#include "renderer/mesh.h"
+#include "renderer/mesh_asset.h"
 #include "renderer/texture.h"
 
 template<typename T>
@@ -16,13 +16,13 @@ concept ValidAssetType =
 	std::is_same_v<T, Texture> ||
 	std::is_same_v<T, CubemapTexture> ||
 	std::is_same_v<T, Material> ||
-	std::is_same_v<T, Mesh>;
+	std::is_same_v<T, MeshAsset>;
 
 using AllAssetTypes = std::tuple<
 	std::type_identity<Texture>,
 	std::type_identity<CubemapTexture>,
 	std::type_identity<Material>,
-	std::type_identity<Mesh>
+	std::type_identity<MeshAsset>
 >;
 
 namespace AssetManagerGlobals {
