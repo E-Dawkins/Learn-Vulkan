@@ -5,6 +5,8 @@
 #include "utils/debug_logger.h"
 #include "utils/image_utils.h"
 
+constexpr bool gVsyncEnabled = true;
+
 void Swapchain::CreateSwapchain() {
 	LOG_MSG("Creating swapchain", LogVerbosity::Info);
 
@@ -15,7 +17,7 @@ void Swapchain::CreateSwapchain() {
 	SwapchainSupportDetails swapChainSupport = QuerySwapChainSupport(appInst.GetPhysicalDevice(), surface);
 
 	VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
-	VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
+	VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.presentModes, gVsyncEnabled);
 	VkExtent2D extent = ChooseSwapExtent(swapChainSupport.capabilities);
 
 	// This is the minimum number of images that are required to function,
@@ -211,10 +213,18 @@ VkSurfaceFormatKHR Swapchain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 	return _availableFormats[0];
 }
 
-VkPresentModeKHR Swapchain::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& _availablePresentModes) {
+VkPresentModeKHR Swapchain::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& _availablePresentModes, bool _vsyncEnabled) {
 	for (const auto& availablePresentMode : _availablePresentModes) {
-		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-			return availablePresentMode;
+		// Prefer specific present modes depending on vsync toggle
+		if (_vsyncEnabled) {
+			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+				return availablePresentMode;
+			}
+		}
+		else {
+			if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+				return availablePresentMode;
+			}
 		}
 	}
 
