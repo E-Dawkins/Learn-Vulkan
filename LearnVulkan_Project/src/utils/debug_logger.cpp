@@ -4,8 +4,11 @@
 #include <chrono>
 #include <format>
 
+DebugLogger::DebugLogger(const std::filesystem::path& _logFolder)
+	: mLogFolder(_logFolder) {}
+
 void DebugLogger::OnInitialized() {
-	const std::filesystem::path filePath("saved\\logs\\temp.log");
+	const std::filesystem::path filePath(mLogFolder / "temp.log");
 
 	// Create parent directory if it doesn't already exist
 	if (!std::filesystem::exists(filePath.parent_path())) {

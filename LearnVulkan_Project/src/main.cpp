@@ -20,7 +20,7 @@ static void SafeShutdown() {
 int main() {
 	try {
 		// Global systems (non App relevant)
-		DebugLogger::Init();
+		DebugLogger::Init("saved\\logs");
 		Config::Init("config");
 		InputManager::Init();
 

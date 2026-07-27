@@ -4,6 +4,9 @@
 #include "renderer/material.h"
 #include "renderer/texture.h"
 
+AssetManager::AssetManager(const std::filesystem::path& _assetFolder)
+	: mAssetFolder(_assetFolder) {}
+
 void AssetManager::OnInitialized() {
 	LOG_MSG("Init", LogVerbosity::Info);
 }

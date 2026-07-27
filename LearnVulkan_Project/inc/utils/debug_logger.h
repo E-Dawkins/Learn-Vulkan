@@ -11,8 +11,12 @@ enum class LogVerbosity
 class DebugLogger : public ISingleton<DebugLogger>
 {
 private:
+	std::filesystem::path mLogFolder;
 	std::ofstream mLogFile;
 	std::string mLastLog;
+
+public:
+	DebugLogger(const std::filesystem::path& _logFolder);
 
 private:
 	void OnInitialized() override;

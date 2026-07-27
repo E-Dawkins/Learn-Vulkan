@@ -36,7 +36,7 @@ const bool gEnableValidationLayers = true;
 #endif
 
 static bool ValidationLayersEnabled() {
-	return gEnableValidationLayers || Config::GetValue<bool>("renderer|debug|force_enable_validation_layers");
+	return gEnableValidationLayers || Config::GetValue<bool>("engine|debug|force_enable_validation_layers");
 }
 
 void App::Run() {
@@ -50,10 +50,10 @@ void App::Run() {
 
 void App::InitWindow() {
 	mWindow = std::make_unique<Window>(
-		Config::GetValue<std::string>("renderer|window|title", "Title").c_str(),
+		Config::GetValue<std::string>("engine|window|title", "Title").c_str(),
 		glm::ivec2{
-			Config::GetValue<size_t>("renderer|window|width", 800),
-			Config::GetValue<size_t>("renderer|window|height", 600)
+			Config::GetValue<size_t>("engine|window|width", 800),
+			Config::GetValue<size_t>("engine|window|height", 600)
 		}
 	);
 	assert(mWindow);
@@ -163,7 +163,7 @@ void App::Event_ToggleTextureLoad() {
 		managerInst.UnloadAsset<Texture>(texPath);
 	}
 	else {
-		managerInst.LoadAsset<Texture>(std::filesystem::path("assets") / texPath);
+		managerInst.LoadAsset<Texture>(texPath);
 	}
 }
 
@@ -220,7 +220,7 @@ void App::InitVulkan() {
 	// IT DOES NOT MATTER THE LOAD ORDER ANYMORE, THE STABLE ID => DENSE ID WORKS! :)
 	using namespace std::placeholders;
 
-	AssetManager::Init();
+	AssetManager::Init(Config::GetValue<std::string>("engine|systems|asset_folder", "assets"));
 	
 	AssetManager& managerInst = AssetManager::GetInstance();
 	managerInst.GetLoadCallback<Texture>() = std::bind(&MaterialData::OnTextureLoaded, &mMaterialData, _1, _2, _3);
@@ -230,24 +230,24 @@ void App::InitVulkan() {
 	managerInst.GetLoadCallback<Material>() = std::bind(&MaterialData::OnMaterialLoaded, &mMaterialData, _1, _2, _3);
 	managerInst.GetUnloadCallback<Material>() = std::bind(&MaterialData::OnMaterialUnloaded, &mMaterialData, _1);
 
-	managerInst.LoadAsset<CubemapTexture>("assets\\textures\\skybox_debug.texture");
-	managerInst.LoadAsset<CubemapTexture>("assets\\textures\\skybox_clouds.texture");
+	managerInst.LoadAsset<CubemapTexture>("textures\\skybox_debug.texture");
+	managerInst.LoadAsset<CubemapTexture>("textures\\skybox_clouds.texture");
 
-	managerInst.LoadAsset<Texture>("assets\\textures\\default_texture.texture");
-	managerInst.LoadAsset<Texture>("assets\\textures\\viking_room.texture");
-	managerInst.LoadAsset<Texture>("assets\\textures\\statue.texture");
+	managerInst.LoadAsset<Texture>("textures\\default_texture.texture");
+	managerInst.LoadAsset<Texture>("textures\\viking_room.texture");
+	managerInst.LoadAsset<Texture>("textures\\statue.texture");
 
 	{
-		auto meshAsset = managerInst.LoadAsset<MeshAsset>("assets\\models\\primitives\\cube.mesh");
+		auto meshAsset = managerInst.LoadAsset<MeshAsset>("models\\primitives\\cube.mesh");
 		mSkyboxMesh = std::make_unique<MeshInstance>(meshAsset);
 		mSkyboxMesh->AddInstance(RenderTransform());
 
-		auto skyboxMat = managerInst.LoadAsset<Material>("assets\\materials\\skybox.material");
+		auto skyboxMat = managerInst.LoadAsset<Material>("materials\\skybox.material");
 		mSkyboxMesh->SetMaterial(skyboxMat);
 	}
 
 	{
-		auto meshAsset = managerInst.LoadAsset<MeshAsset>("assets\\models\\viking_room.mesh");
+		auto meshAsset = managerInst.LoadAsset<MeshAsset>("models\\viking_room.mesh");
 		mTempMesh = std::make_unique<MeshInstance>(meshAsset);
 
 		int xCount = glm::clamp(Config::GetValue<int>("demo|inst render|xCount", 5), 1, 9);
@@ -272,7 +272,7 @@ void App::InitVulkan() {
 			}
 		}
 
-		auto testMat = managerInst.LoadAsset<Material>("assets\\materials\\test.material");
+		auto testMat = managerInst.LoadAsset<Material>("materials\\test.material");
 		mTempMesh->SetMaterial(testMat);
 	}
 }
@@ -289,7 +289,7 @@ void App::CreateInstance() {
 	// the GPU optimize for our specific application
 	VkApplicationInfo appInfo = {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-		.pApplicationName = "Learn Vulkan",
+		.pApplicationName = "Vulkan Engine",
 		.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 		.pEngineName = "No Engine",
 		.engineVersion = VK_MAKE_VERSION(1, 0, 0),
@@ -1019,10 +1019,11 @@ void App::CleanupSwapchain(bool _isFinalCleanup) {
 
 void App::Start() {
 	mCamera = std::make_unique<FlyCamera>(
-		80.f,			// fov
-		0.1f, 10.f,		// near-far clip
-		3.f,			// fly speed
-		1.5f			// look speed
+		Config::GetValue<float>("engine|camera|fov", 80.f),
+		Config::GetValue<float>("engine|camera|near_clip", 0.1f),
+		Config::GetValue<float>("engine|camera|far_clip", 10.f),
+		Config::GetValue<float>("engine|camera|fly_speed", 3.f),
+		Config::GetValue<float>("engine|camera|look_speed", 1.5f)
 	);
 
 	const VkExtent2D& swapchainExtent = mSwapchain->GetExtent();

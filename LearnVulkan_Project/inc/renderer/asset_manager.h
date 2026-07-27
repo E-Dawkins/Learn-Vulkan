@@ -129,6 +129,8 @@ public:
 class AssetManager : public ISingleton<AssetManager>
 {
 private:
+	std::filesystem::path mAssetFolder;
+
 	// Shared mapping, as stable ids are unique to asset paths
 	std::unordered_map<AssetDefs::StableId, std::shared_ptr<IAsset>> mStableIdToAsset;
 	bool mIsCleaningUp = false;
@@ -166,6 +168,9 @@ private:
 	{
 		static inline std::function<void(std::weak_ptr<T>)> loadCallback;
 	};
+
+public:
+	AssetManager(const std::filesystem::path& _assetFolder);
 
 private:
 	void OnInitialized() override;
@@ -215,15 +220,16 @@ public:
 
 	template<ValidAssetType T>
 	std::weak_ptr<T> LoadAsset(const std::filesystem::path& _filepath) {
-		const std::string assetName = StripFirstFolder(_filepath);
+		const std::filesystem::path fullAssetPath = mAssetFolder / _filepath;
+		const std::string relativeAssetPath = _filepath.string();
 		
 		// Store in asset map
 		auto& assetMap = MapFor<T>::value;
-		assetMap[assetName] = std::make_shared<T>(_filepath);
-		auto& loadedAsset = assetMap[assetName];
+		assetMap[relativeAssetPath] = std::make_shared<T>(fullAssetPath);
+		auto& loadedAsset = assetMap[relativeAssetPath];
 
 		// Store stable id -> asset mapping
-		mStableIdToAsset[loadedAsset->GetStableId()] = assetMap[assetName];
+		mStableIdToAsset[loadedAsset->GetStableId()] = assetMap[relativeAssetPath];
 
 		if constexpr (HasSlotType<T>) {
 			// Allocate a dense id
@@ -243,8 +249,8 @@ public:
 			}
 		}
 
-		LOG_MSG(std::format("Loaded asset (stableId = {}, name = '{}')", 
-			loadedAsset->GetStableId(), _filepath.filename().string()), LogVerbosity::Info);
+		LOG_MSG(std::format("Loaded asset (stableId = {}, name = '{}')",
+			loadedAsset->GetStableId(), fullAssetPath.filename().string()), LogVerbosity::Info);
 
 		return std::dynamic_pointer_cast<T>(loadedAsset);
 	}
