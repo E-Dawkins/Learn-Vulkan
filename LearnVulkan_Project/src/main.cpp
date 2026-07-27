@@ -1,26 +1,37 @@
 #include "pch.h"
 
 #include "app.h"
+#include "utils/config.h"
 #include "utils/debug_logger.h"
 #include "utils/input_manager.h"
 
+static void SafeShutdown() {
+	// We have this as a separate function as we need this
+	// to run in the case of a successful (normal) shutdown
+	// but also in the case of any thrown exceptions.
+
+	App::Shutdown();
+
+	InputManager::Shutdown();
+	Config::Shutdown();
+	DebugLogger::Shutdown();
+}
+
 int main() {
 	try {
+		// Global systems (non App relevant)
 		DebugLogger::Init();
+		Config::Init("config");
 		InputManager::Init();
-		{
-			App::Init();
-			App::GetInstance().Run();
-			App::Shutdown();
-		}
-		InputManager::Shutdown();
-		DebugLogger::Shutdown();
+
+		// Main app
+		App::Init();
+		App::GetInstance().Run();
+
+		SafeShutdown();
 	}
 	catch (const std::exception& e) {
-		{
-			App::Shutdown();
-		}
-		DebugLogger::Shutdown();
+		SafeShutdown();
 
 		std::cerr << e.what() << "\n";
 		std::cout << "\nPress Enter to continue...\n";

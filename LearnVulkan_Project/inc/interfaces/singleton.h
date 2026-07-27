@@ -25,11 +25,14 @@ public:
 	ISingleton(ISingleton&&) = delete;
 	ISingleton& operator = (ISingleton&&) = delete;
 
-	static void Init() {
+	static void Init(auto&&... args) {
 		// Don't allow init to be called multiple times
 		assert(!mInstance);
 
-		mInstance = new T();
+		// The forwarding of args was taken directly from: https://en.cppreference.com/cpp/utility/forward
+		// still not 100% sure why this works...
+
+		mInstance = new T(std::forward<decltype(args)>(args)...);
 		mInstance->OnInitialized();
 	}
 

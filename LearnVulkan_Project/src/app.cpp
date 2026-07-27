@@ -10,6 +10,7 @@
 #include "renderer/shader.h"
 #include "renderer/texture.h"
 #include "renderer/asset_manager.h"
+#include "utils/config.h"
 #include "utils/debug_logger.h"
 #include "utils/image_utils.h"
 #include "utils/vulkan_ext_funcs.h"
@@ -17,7 +18,6 @@
 #include <algorithm>
 #include <chrono>
 
-const glm::ivec2 gWindowExtents{ 800, 600 };
 const int8_t gMaxFramesInFlight = 2;
 
 const std::vector<const char*> gValidationLayers = {
@@ -35,6 +35,10 @@ const bool gEnableValidationLayers = false;
 const bool gEnableValidationLayers = true;
 #endif
 
+static bool ValidationLayersEnabled() {
+	return gEnableValidationLayers || Config::GetValue<bool>("renderer|debug|force_enable_validation_layers");
+}
+
 void App::Run() {
 	InitWindow();
 	SetupInput();
@@ -45,7 +49,13 @@ void App::Run() {
 }
 
 void App::InitWindow() {
-	mWindow = std::make_unique<Window>("Learn Vulkan", gWindowExtents);
+	mWindow = std::make_unique<Window>(
+		Config::GetValue<std::string>("renderer|window|title", "Title").c_str(),
+		glm::ivec2{
+			Config::GetValue<size_t>("renderer|window|width", 800),
+			Config::GetValue<size_t>("renderer|window|height", 600)
+		}
+	);
 	assert(mWindow);
 	
 	using namespace std::placeholders;
@@ -240,12 +250,24 @@ void App::InitVulkan() {
 		auto meshAsset = managerInst.LoadAsset<MeshAsset>("assets\\models\\viking_room.mesh");
 		mTempMesh = std::make_unique<MeshInstance>(meshAsset);
 
-		int gridExtent = 3, spacing = 2;
+		int xCount = glm::clamp(Config::GetValue<int>("demo|inst render|xCount", 5), 1, 9);
+		int yCount = glm::clamp(Config::GetValue<int>("demo|inst render|yCount", 5), 1, 9);
+		float spacing = glm::clamp(Config::GetValue<float>("demo|inst render|spacing", 2.f), 0.f, 4.f);
+
+		float xExtent = xCount / 2.f;
+		float minX = -((spacing * 0.5f * xExtent) + (xExtent - 1));
+
+		float yExtent = yCount / 2.f;
+		float minY = -((spacing * 0.5f * yExtent) + (yExtent - 1));
 
 		RenderTransform t;
-		for (int i = -gridExtent; i <= gridExtent; i++) {
-			for (int j = -gridExtent; j <= gridExtent; j++) {
-				t.SetPosition({ i * spacing, j * spacing, 0 });
+		for (int x = 0; x < xCount; x++) {
+			for (int y = 0; y < yCount; y++) {
+				t.SetPosition(glm::vec3(
+					minX + (x * spacing),
+					minY + (y * spacing),
+					0
+				));
 				mTempMesh->AddInstance(t);
 			}
 		}
@@ -259,7 +281,7 @@ void App::CreateInstance() {
 	LOG_MSG("Creating Vulkan instance", LogVerbosity::Info);
 
 	// First thing's first, check for validation layer support
-	if (gEnableValidationLayers && !CheckValidationLayerSupport()) {
+	if (ValidationLayersEnabled() && !CheckValidationLayerSupport()) {
 		throw std::runtime_error("Validation layers requested, but not available!");
 	}
 
@@ -291,7 +313,7 @@ void App::CreateInstance() {
 	// Conditionally enable validation layers, and the debug messenger
 	// We store this here, so that it is not destroyed before 'vkCreateInstance'
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
-	if (gEnableValidationLayers) {
+	if (ValidationLayersEnabled()) {
 		createInfo.enabledLayerCount = static_cast<uint32_t>(gValidationLayers.size());
 		createInfo.ppEnabledLayerNames = gValidationLayers.data();
 
@@ -322,7 +344,7 @@ std::vector<const char*> App::GetRequiredExtensions() {
 	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
 	// This is for adding a custom message callback for validation layers
-	if (gEnableValidationLayers) {
+	if (ValidationLayersEnabled()) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 
@@ -375,7 +397,7 @@ bool App::CheckValidationLayerSupport() {
 }
 
 void App::SetupDebugMessenger() {
-	if (!gEnableValidationLayers) {
+	if (!ValidationLayersEnabled()) {
 		return;
 	}
 
@@ -588,7 +610,7 @@ void App::CreateLogicalDevice() {
 
 	// Check for validation layer support, this is no longer necessary in
 	// Vulkan and only needed for compatibility with older implementations
-	if (gEnableValidationLayers) {
+	if (ValidationLayersEnabled()) {
 		createInfo.enabledLayerCount = static_cast<uint32_t>(gValidationLayers.size());
 		createInfo.ppEnabledLayerNames = gValidationLayers.data();
 	}
@@ -1189,7 +1211,7 @@ void App::OnCleanup() {
 
 	vkDestroyDevice(mLogicalDevice, nullptr);
 
-	if (gEnableValidationLayers) {
+	if (ValidationLayersEnabled()) {
 		Utils::VulkanExtFuncs::DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
 	}
 
