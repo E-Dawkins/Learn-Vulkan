@@ -2,12 +2,15 @@
 #include <vulkan/vulkan.h>
 
 #include "math/transform.h"
+#include "renderer/renderer_types.h"
 
 class MeshAsset;
 class Material;
 
 class MeshInstance
 {
+	friend RenderBucketMap;
+
 protected:
 	std::weak_ptr<MeshAsset> mRefMesh;
 	std::weak_ptr<Material> mMaterial;
@@ -17,6 +20,8 @@ protected:
 
 	// This is bound during draw to map instance index to transform index.
 	std::vector<uint32_t> mTransformIndices;
+
+	RenderBucketMap::RuntimeRenderId mRuntimeId;
 
 public:
 	MeshInstance(std::weak_ptr<MeshAsset> _mesh);

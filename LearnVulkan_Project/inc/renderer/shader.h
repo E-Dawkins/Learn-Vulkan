@@ -34,6 +34,9 @@ public:
 
 	const VkPipelineLayout& GetLayoutForShader() const;
 
+	inline BlendModel GetBlendModel() const { return mBlendModel; }
+	inline ShadingModel GetShadingModel() const { return mShadingModel; }
+
 private:
 	VkShaderModule CreateModule(const ShaderStage& _stage, const std::vector<char>& _shaderCode);
 	void CreatePipeline(const std::vector<VkPipelineShaderStageCreateInfo>& _stageCreateInfos);

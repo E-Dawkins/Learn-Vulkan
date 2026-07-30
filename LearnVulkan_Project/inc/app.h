@@ -49,8 +49,9 @@ private:
 	VkDescriptorPool mMeshDescriptorPool;
 	MeshData mMeshData;
 
-	std::unique_ptr<MeshInstance> mSkyboxMesh;
-	std::unique_ptr<MeshInstance> mTempMesh;
+	RenderBucketMap mRenderBuckets;
+
+	std::shared_ptr<MeshInstance> mTempMesh;
 	std::unique_ptr<FlyCamera> mCamera;
 
 	bool mFramebufferResized = false;

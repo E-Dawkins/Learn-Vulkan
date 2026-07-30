@@ -6,6 +6,7 @@
 #include "renderer/camera.h"
 #include "renderer/material.h"
 #include "renderer/pipeline_layout_manager.h"
+#include "renderer/shader.h"
 #include "utils/debug_logger.h"
 
 void FrameData::Init(VkDevice _logicalDevice, VkCommandPool _commandPool) {
@@ -485,3 +486,67 @@ void MeshData::CreateDescriptorSet(VkDevice _logicalDevice, VkDescriptorPool _de
 	mInstanceTransforms.WriteToDescriptorSet(mDescriptorSet, 0);
 	mInstToTransformIndex.WriteToDescriptorSet(mDescriptorSet, 1);
 }
+
+#pragma region RenderBucketMap
+RenderBucketMap::RenderBucketMap() {
+	// Init free ids
+	for (RuntimeRenderId i = std::numeric_limits<RuntimeRenderId>::max(); i >= 1; i--) {
+		mFreeIds.push(i - 1);
+	}
+
+	// Init buckets
+	for (size_t b = 0; b < static_cast<size_t>(BlendModel::Count); b++) {
+		for (size_t s = 0; s < static_cast<size_t>(ShadingModel::Count); s++) {
+			RenderPassHash hash = GetRenderPassHash(static_cast<BlendModel>(b), static_cast<ShadingModel>(s));
+			mBuckets.insert({ hash, {} });
+		}
+	}
+}
+
+RenderBucketMap::RuntimeRenderId RenderBucketMap::RegisterMeshInstance(std::shared_ptr<MeshInstance> _toRegister) {
+	assert(!mFreeIds.empty());
+
+	// Get next free id
+	_toRegister->mRuntimeId = mFreeIds.top();
+	mFreeIds.pop();
+
+	// Get blend + shading models
+	BlendModel blend = BlendModel::Opaque;
+	ShadingModel shading = ShadingModel::Unlit;
+
+	if (auto meshMat = _toRegister->mMaterial.lock()) {
+		const Shader& shader = meshMat->GetShader();
+
+		blend = shader.GetBlendModel();
+		shading = shader.GetShadingModel();
+	}
+
+	// Store in map
+	RenderPassHash hash = GetRenderPassHash(blend, shading);
+	mBuckets[hash].insert({ _toRegister->mRuntimeId, _toRegister });
+
+	return _toRegister->mRuntimeId;
+}
+
+void RenderBucketMap::UnregisterMeshInstance(std::weak_ptr<MeshInstance> _toUnregister) {
+	auto meshInst = _toUnregister.lock();
+	if (!meshInst) {
+		return;
+	}
+
+	// Get blend + shading models
+	BlendModel blend = BlendModel::Opaque;
+	ShadingModel shading = ShadingModel::Unlit;
+
+	if (auto meshMat = meshInst->mMaterial.lock()) {
+		const Shader& shader = meshMat->GetShader();
+
+		blend = shader.GetBlendModel();
+		shading = shader.GetShadingModel();
+	}
+
+	// Erase from map
+	RenderPassHash hash = GetRenderPassHash(blend, shading);
+	mBuckets[hash].erase(meshInst->mRuntimeId);
+}
+#pragma endregion

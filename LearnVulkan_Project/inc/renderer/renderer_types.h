@@ -7,8 +7,13 @@
 class Texture;
 class CubemapTexture;
 class Material;
+class MeshInstance;
 
 struct RenderTransform;
+
+// TODO: maybe move these enums into this file, rather than forwarding them?
+enum class BlendModel : uint8_t;
+enum class ShadingModel : uint8_t;
 
 struct QueueFamilyIndices
 {
@@ -121,4 +126,33 @@ private:
 	void InitBuffers();
 	void CreateDescriptorSet(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool);
 
+};
+
+class RenderBucketMap
+{
+public:
+	using RenderPassHash = uint16_t;
+	using RuntimeRenderId = uint16_t;
+	using RenderBucket = std::unordered_map<RuntimeRenderId, std::shared_ptr<MeshInstance>>;
+
+private:
+	std::stack<RuntimeRenderId> mFreeIds;
+	std::unordered_map<RenderPassHash, RenderBucket> mBuckets;
+
+public:
+	RenderBucketMap();
+
+	RuntimeRenderId RegisterMeshInstance(std::shared_ptr<MeshInstance> _toRegister);
+	void UnregisterMeshInstance(std::weak_ptr<MeshInstance> _toUnregister);
+
+	inline const RenderBucket& GetBucket(RenderPassHash _hash) const { return mBuckets.at(_hash); }
+
+	static constexpr RenderPassHash GetRenderPassHash(BlendModel _blend, ShadingModel _shading) {
+		constexpr int halfBitCount = std::numeric_limits<RenderPassHash>::digits / 2;
+
+		RenderPassHash shadingHash = static_cast<RenderPassHash>(_shading) << halfBitCount;
+		RenderPassHash blendHash = static_cast<RenderPassHash>(_blend);
+
+		return blendHash | shadingHash;
+	}
 };

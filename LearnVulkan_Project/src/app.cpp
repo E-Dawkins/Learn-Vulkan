@@ -4,12 +4,12 @@
 #include "pch.h"
 
 #include "app.h"
+#include "renderer/asset_manager.h"
 #include "renderer/material.h"
 #include "renderer/mesh_asset.h"
 #include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
-#include "renderer/asset_manager.h"
 #include "utils/config.h"
 #include "utils/debug_logger.h"
 #include "utils/image_utils.h"
@@ -239,16 +239,21 @@ void App::InitVulkan() {
 
 	{
 		auto meshAsset = managerInst.LoadAsset<MeshAsset>("models\\primitives\\cube.mesh");
-		mSkyboxMesh = std::make_unique<MeshInstance>(meshAsset);
-		mSkyboxMesh->AddInstance(RenderTransform());
-
 		auto skyboxMat = managerInst.LoadAsset<Material>("materials\\skybox.material");
-		mSkyboxMesh->SetMaterial(skyboxMat);
+
+		auto skyboxMesh = std::make_shared<MeshInstance>(meshAsset);
+		skyboxMesh->SetMaterial(skyboxMat);
+		skyboxMesh->AddInstance(RenderTransform());
+
+		mRenderBuckets.RegisterMeshInstance(skyboxMesh);
 	}
 
 	{
 		auto meshAsset = managerInst.LoadAsset<MeshAsset>("models\\viking_room.mesh");
-		mTempMesh = std::make_unique<MeshInstance>(meshAsset);
+		auto testMat = managerInst.LoadAsset<Material>("materials\\test.material");
+
+		mTempMesh = std::make_shared<MeshInstance>(meshAsset);
+		mTempMesh->SetMaterial(testMat);
 
 		int xCount = glm::clamp(Config::GetValue<int>("demo|inst render|xCount", 5), 1, 9);
 		int yCount = glm::clamp(Config::GetValue<int>("demo|inst render|yCount", 5), 1, 9);
@@ -272,8 +277,7 @@ void App::InitVulkan() {
 			}
 		}
 
-		auto testMat = managerInst.LoadAsset<Material>("materials\\test.material");
-		mTempMesh->SetMaterial(testMat);
+		mRenderBuckets.RegisterMeshInstance(mTempMesh);
 	}
 }
 
@@ -955,22 +959,29 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 			);
 		};
 
-		// Subpass 0 - skybox
-		{
-			const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Skybox);
-			bindDescriptorSetsToLayout(layout);
+		// For now, render buckets in order of blend / shading model declaration
+		for (size_t b = 0; b < static_cast<size_t>(BlendModel::Count); b++) {
+			for (size_t s = 0; s < static_cast<size_t>(ShadingModel::Count); s++) {
+				if (s != 0) {
+					vkCmdNextSubpass(_commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+				}
 
-			mSkyboxMesh->BindMeshResources(_commandBuffer);
-			mSkyboxMesh->DrawMesh(_commandBuffer);
-		}
-		// Subpass 1 - opaque geometry
-		vkCmdNextSubpass(_commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-		{
-			const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(BlendModel::Opaque, ShadingModel::Unlit);
-			bindDescriptorSetsToLayout(layout);
+				BlendModel bModel = static_cast<BlendModel>(b);
+				ShadingModel sModel = static_cast<ShadingModel>(s);
 
-			mTempMesh->BindMeshResources(_commandBuffer);
-			mTempMesh->DrawMesh(_commandBuffer);
+				// Bind layout for this render pass + sub-pass
+				const VkPipelineLayout& layout = PipelineLayoutManager::GetInstance().GetLayoutForModel(bModel, sModel);
+				bindDescriptorSetsToLayout(layout);
+
+				// Render all mesh instances in this render pass + sub-pass
+				RenderBucketMap::RenderPassHash hash = RenderBucketMap::GetRenderPassHash(bModel, sModel);
+				const RenderBucketMap::RenderBucket& bucket = mRenderBuckets.GetBucket(hash);
+
+				for (auto& [runtimeId, meshInst] : bucket) {
+					meshInst->BindMeshResources(_commandBuffer);
+					meshInst->DrawMesh(_commandBuffer);
+				}
+			}
 		}
 	}
 	vkCmdEndRenderPass(_commandBuffer);
