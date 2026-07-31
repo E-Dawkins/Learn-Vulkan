@@ -211,8 +211,8 @@ void PipelineLayoutManager::CreatePresetLayouts() {
 	// For now, we just set it up to have the minimum guaranteed amount
 	// Guaranteed 128-bytes total by Vulkan spec
 	const std::array<VkPushConstantRange, 2> pcRanges{
-		VkPushConstantRange{ .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = 64 },
-		VkPushConstantRange{ .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT, .offset = 64, .size = 64 },
+		VkPushConstantRange{ .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = gPcRangeVertex },
+		VkPushConstantRange{ .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT, .offset = gPcRangeVertex, .size = 128 - gPcRangeVertex },
 	};
 
 	for (uint8_t i = 0; i < mPresets.size(); i++) {

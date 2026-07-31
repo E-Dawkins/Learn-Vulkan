@@ -1093,7 +1093,8 @@ void App::DrawFrame(float _deltaTime) {
 	// Manually reset our fences, only if we are submitting work
 	vkResetFences(mLogicalDevice, 1, &inFlightFence);
 
-	UpdateUniformBuffer(mCurrentFrame, _deltaTime);
+	UpdateUniformBuffer(mCurrentFrame);
+	UpdateDemo(_deltaTime);
 
 	// Reset + record our command buffer
 	vkResetCommandBuffer(commandBuffer, 0);
@@ -1175,19 +1176,22 @@ void App::DrawFrame(float _deltaTime) {
 	mCurrentFrame = (mCurrentFrame + 1) % gMaxFramesInFlight;
 }
 
-void App::UpdateUniformBuffer(uint32_t _currentImage, float _deltaTime) {
-	// TODO - move this somewhere else now that mesh has its' own transform (matrix)
-	mTempMesh->GetTransform(mTempMesh->GetInstanceCount() / 2).AddRotation(glm::angleAxis(
-		_deltaTime * glm::radians(90.f),	// rotation (in radians)
-		gWorldUp							// axis of rotation
-	));
-
+void App::UpdateUniformBuffer(uint32_t _currentImage) {
 	assert(mCamera);
 
 	// Copy ubo directly into already mapped buffer
 	const CameraData& camData = mCamera->GetGraphicsData();
 	void* mapped = mFrameData[_currentImage].GetUniformBuffer().mapped;
 	memcpy(mapped, &camData, sizeof(CameraData));
+}
+
+void App::UpdateDemo(float _deltaTime) {
+	// Eventually this function will *not* be part of the renderer
+	// but for now it does its' job and that is all that matters :)
+	mTempMesh->GetTransform(mTempMesh->GetInstanceCount() / 2).AddRotation(glm::angleAxis(
+		_deltaTime * glm::radians(90.f),	// rotation (in radians)
+		gWorldUp							// axis of rotation
+	));
 }
 
 void App::OnInitialized() {

@@ -68,7 +68,7 @@ public:
 		return mRenderPasses[_index];
 	}
 	inline const Window& GetWindow() const { return *mWindow; }
-	inline MeshData& GetMeshData() { return mMeshData; } // TODO: remove this
+	inline MeshData& GetMeshData() { return mMeshData; }
 
 	VkCommandBuffer BeginSingleTimeCommands() const;
 	void EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const;
@@ -122,7 +122,8 @@ private:
 	void Start();
 	void MainLoop();
 	void DrawFrame(float _deltaTime);
-	void UpdateUniformBuffer(uint32_t _currentImage, float _deltaTime);
+	void UpdateUniformBuffer(uint32_t _currentImage);
+	void UpdateDemo(float _deltaTime);
 
 private:
 	void OnInitialized() override;

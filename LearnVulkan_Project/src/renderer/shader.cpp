@@ -2,6 +2,7 @@
 
 #include "app.h"
 #include "renderer/mesh_asset.h"
+#include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
 
 Shader::Shader(const std::vector<ShaderStage>& _stages, BlendModel _blendModel, ShadingModel _shadingModel, RasterizerState _rasterizerState)

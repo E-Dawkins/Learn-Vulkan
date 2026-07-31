@@ -1,9 +1,10 @@
 #include "pch.h"
 #include "renderer/material.h"
 
+#include "renderer/asset_manager.h"
+#include "renderer/pipeline_layout_manager.h"
 #include "renderer/shader.h"
 #include "renderer/texture.h"
-#include "renderer/asset_manager.h"
 #include "utils/debug_logger.h"
 
 #define warn_user(s) LOG_MSG(std::format("No {} found on disk for {}", s, DebugStr()), LogVerbosity::Warning)
@@ -37,7 +38,7 @@ void Material::BindMaterialResources(const VkCommandBuffer& _commandBuffer) {
 		_commandBuffer,
 		mShader->GetLayoutForShader(),
 		VK_SHADER_STAGE_FRAGMENT_BIT,
-		64, // TODO - make this not hard-coded (fragment pc range starts at offset 64)
+		gPcRangeVertex, // fragment pc range starts at end of vertex pc range
 		sizeof(AssetDefs::DenseId),
 		&GetDenseId()
 	);

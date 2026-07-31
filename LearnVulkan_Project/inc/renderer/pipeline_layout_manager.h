@@ -1,22 +1,9 @@
 #pragma once
 #include "interfaces/singleton.h"
 
-#include <array>
+#include "renderer/renderer_types.h"
 
-enum class BlendModel : uint8_t
-{
-	Opaque,
-
-	Count
-};
-
-enum class ShadingModel : uint8_t
-{
-	Skybox,
-	Unlit,
-
-	Count
-};
+constexpr uint32_t gPcRangeVertex = 64;
 
 enum class DescriptorSet
 {

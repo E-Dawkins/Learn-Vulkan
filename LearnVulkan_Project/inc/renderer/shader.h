@@ -1,7 +1,7 @@
 #pragma once
 #include "interfaces/file_reader.h"
 
-#include "renderer/pipeline_layout_manager.h"
+#include "renderer/renderer_types.h"
 
 #include <vulkan/vulkan.h>
 

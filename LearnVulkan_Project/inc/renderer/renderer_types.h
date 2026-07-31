@@ -11,9 +11,20 @@ class MeshInstance;
 
 struct RenderTransform;
 
-// TODO: maybe move these enums into this file, rather than forwarding them?
-enum class BlendModel : uint8_t;
-enum class ShadingModel : uint8_t;
+enum class BlendModel : uint8_t
+{
+	Opaque,
+
+	Count
+};
+
+enum class ShadingModel : uint8_t
+{
+	Skybox,
+	Unlit,
+
+	Count
+};
 
 struct QueueFamilyIndices
 {

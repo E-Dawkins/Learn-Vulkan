@@ -2,20 +2,33 @@
 #include "math/transform.h"
 
 void Transform::SetPosition(const glm::vec3& _p) {
-	mPosition = _p;
-	mDirty = true;
+	// Note to self - std::exchange does the following but in 1 line:
+	//		vec3 old = mPosition;
+	//		mPosition = _p;
+	const glm::vec3 old = std::exchange(mPosition, _p);
+
+	if (onPositionChanged) {
+		onPositionChanged(old, mPosition);
+	}
 }
 
 void Transform::SetRotation(const glm::quat& _r) {
-	mRotation = glm::normalize(_r);
-	mDirty = true;
+	const glm::quat normR = glm::normalize(_r);
+	const glm::quat old = std::exchange(mRotation, normR);
 
 	RecalculateAxisVectors();
+
+	if (onRotationChanged) {
+		onRotationChanged(old, mRotation);
+	}
 }
 
 void Transform::SetScale(const glm::vec3& _s) {
-	mScale = _s;
-	mDirty = true;
+	const glm::vec3 old = std::exchange(mScale, _s);
+
+	if (onScaleChanged) {
+		onScaleChanged(old, mScale);
+	}
 }
 
 void Transform::AddPosition(const glm::vec3& _deltaPosition) {
@@ -81,4 +94,22 @@ void RenderTransform::UpdateMappedMatrix() {
 		* glm::scale(glm::mat4(1), mScale);
 
 	mDirty = false;
+}
+
+void RenderTransform::SetPosition(const glm::vec3& _p) {
+	Transform::SetPosition(_p);
+
+	mDirty = true;
+}
+
+void RenderTransform::SetRotation(const glm::quat& _r) {
+	Transform::SetRotation(_r);
+
+	mDirty = true;
+}
+
+void RenderTransform::SetScale(const glm::vec3& _s) {
+	Transform::SetScale(_s);
+
+	mDirty = true;
 }

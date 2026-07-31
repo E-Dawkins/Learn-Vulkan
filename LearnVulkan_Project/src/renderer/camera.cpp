@@ -6,6 +6,10 @@ Camera::Camera(float _fovDegrees, float _nearClip, float _farClip) {
 	SetFovDegrees(_fovDegrees);
 	SetNearClip(_nearClip);
 	SetFarClip(_farClip);
+
+	// Re-calculate view matrix on any transform change (not scale as it is unnecessary work)
+	transform.onPositionChanged = std::bind([&]() { RecalculateViewMatrix(); });
+	transform.onRotationChanged = std::bind([&]() { RecalculateViewMatrix(); });
 }
 
 const CameraData& Camera::GetGraphicsData() {
@@ -23,9 +27,6 @@ const CameraData& Camera::GetGraphicsData() {
 
 		mIsDirtyProjMatrix = false;
 	}
-
-	// TODO: find a way to only update this if the transform is modified
-	RecalculateViewMatrix();
 
 	return mCachedGraphicsData;
 }
