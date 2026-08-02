@@ -39,4 +39,5 @@ public:
 		assert(_index < mTransforms.size());
 		return mTransforms[_index];
 	}
+	inline const RenderBucketMap::RuntimeRenderId& GetRuntimeId() { return mRuntimeId; }
 };

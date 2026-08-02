@@ -93,6 +93,8 @@ void App::SetupInput() {
 		inputInst.AddInputEvent(Input::MOUSE_BUTTON_LEFT, InputState::PRESS, MAKE_CB(App::Event_IterateTextures, this));
 		inputInst.AddInputEvent(Input::MOUSE_BUTTON_RIGHT, InputState::PRESS, MAKE_CB(App::Event_IterateColors, this));
 		inputInst.AddInputEvent(Input::MOUSE_BUTTON_MIDDLE, InputState::PRESS, MAKE_CB(App::Event_ToggleTextureLoad, this));
+
+		inputInst.AddInputEvent(Input::M, InputState::PRESS, MAKE_CB(App::Event_ToggleSuzanne, this));
 	}
 
 	// Skybox inputs
@@ -175,6 +177,32 @@ void App::Event_IterateSkyboxes() {
 	}
 }
 
+void App::Event_ToggleSuzanne() {
+	static bool isSuzanneReal = false;
+	static RenderBucketMap::RuntimeRenderId suzanneId = static_cast<RenderBucketMap::RuntimeRenderId>(-1);
+
+	if (isSuzanneReal) {
+		// Destroy Suzanne!
+		mRenderBuckets.UnregisterMeshInstance(suzanneId);
+	}
+	else {
+		// Create a new Suzanne :)
+		auto meshAsset = AssetManager::GetInstance().GetAsset<MeshAsset>("models\\suzanne.mesh");
+		auto matAsset = AssetManager::GetInstance().GetAsset<Material>("materials\\test.material");
+
+		std::shared_ptr<MeshInstance> newSuzanne = std::make_shared<MeshInstance>(meshAsset);
+		newSuzanne->SetMaterial(matAsset);
+
+		RenderTransform t;
+		t.SetPosition({ 0, 0, 3 });
+		newSuzanne->AddInstance(t);
+
+		suzanneId = mRenderBuckets.RegisterMeshInstance(newSuzanne);
+	}
+
+	isSuzanneReal = !isSuzanneReal;
+}
+
 void App::InitVulkan() {
 	CreateInstance();
 	SetupDebugMessenger();
@@ -236,6 +264,8 @@ void App::InitVulkan() {
 	managerInst.LoadAsset<Texture>("textures\\default_texture.texture");
 	managerInst.LoadAsset<Texture>("textures\\viking_room.texture");
 	managerInst.LoadAsset<Texture>("textures\\statue.texture");
+
+	managerInst.LoadAsset<MeshAsset>("models\\suzanne.mesh");
 
 	{
 		auto meshAsset = managerInst.LoadAsset<MeshAsset>("models\\primitives\\cube.mesh");
@@ -890,7 +920,7 @@ void App::EndSingleTimeCommands(VkCommandBuffer _commandBuffer) const {
 	vkFreeCommandBuffers(mLogicalDevice, mCommandPool, 1, &_commandBuffer);
 }
 
-void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) const {
+void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) {
 	VkCommandBufferBeginInfo beginInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			.flags = 0, // optional
@@ -977,7 +1007,11 @@ void App::RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageInd
 				RenderBucketMap::RenderPassHash hash = RenderBucketMap::GetRenderPassHash(bModel, sModel);
 				const RenderBucketMap::RenderBucket& bucket = mRenderBuckets.GetBucket(hash);
 
+				mMeshData.ZeroTransformIndexOffset();
+
 				for (auto& [runtimeId, meshInst] : bucket) {
+					mMeshData.PushTransformIndexOffset(_commandBuffer, layout);
+
 					meshInst->BindMeshResources(_commandBuffer);
 					meshInst->DrawMesh(_commandBuffer);
 				}

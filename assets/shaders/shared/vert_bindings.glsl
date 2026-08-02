@@ -12,6 +12,10 @@ layout (set = 2, binding = 1) readonly buffer InstToTransformIndex {
 	uint transformIndices[];
 };
 
+layout(push_constant) uniform PushConstants {
+	layout(offset = 0) uint transformIndexOffset;
+} pc;
+
 layout (location = 0) in vec3 iPosition;
 layout (location = 1) in vec3 iColor;
 layout (location = 2) in vec2 iTexCoord;
@@ -19,5 +23,5 @@ layout (location = 2) in vec2 iTexCoord;
 
 /* ----- Helper Functions ----- */
 mat4 getModelMatrix(uint _instIndex) {
-	return transforms[transformIndices[_instIndex]];
+	return transforms[transformIndices[pc.transformIndexOffset + _instIndex]];
 }

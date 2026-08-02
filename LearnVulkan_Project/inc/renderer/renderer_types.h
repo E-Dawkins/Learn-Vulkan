@@ -123,6 +123,7 @@ private:
 	Utils::BufferUtils::Ssbo mInstanceTransforms;
 	Utils::BufferUtils::Ssbo mInstToTransformIndex;
 	std::stack<uint32_t> mFreeTransforms;
+	uint32_t mTransformIndexOffset = 0;
 
 public:
 	void Init(VkDevice _logicalDevice, VkDescriptorPool _descriptorPool);
@@ -130,6 +131,9 @@ public:
 
 	void MapFreeTransform(RenderTransform& _value, uint32_t& _outIndex);
 	void BindTransformIndices(const std::vector<uint32_t>& _transformIndices);
+
+	void ZeroTransformIndexOffset();
+	void PushTransformIndexOffset(VkCommandBuffer _commandBuffer, VkPipelineLayout _layout) const;
 
 	inline const VkDescriptorSet& GetDescriptorSet() const { return mDescriptorSet; }
 
@@ -143,7 +147,7 @@ class RenderBucketMap
 {
 public:
 	using RenderPassHash = uint16_t;
-	using RuntimeRenderId = uint16_t;
+	using RuntimeRenderId = uint8_t;
 	using RenderBucket = std::unordered_map<RuntimeRenderId, std::shared_ptr<MeshInstance>>;
 
 private:
@@ -153,8 +157,16 @@ private:
 public:
 	RenderBucketMap();
 
+	// Computes render pass hash, and stores mesh instance in matching bucket
+	// @returns Runtime id of stored mesh instance
 	RuntimeRenderId RegisterMeshInstance(std::shared_ptr<MeshInstance> _toRegister);
+
+	// Computes render pass hash, and erases mesh id directly from matching bucket
 	void UnregisterMeshInstance(std::weak_ptr<MeshInstance> _toUnregister);
+
+	// This will try to erase the id from every bucket until one succeeds,
+	// so it is slightly slower than 'UnregisterMeshInstance(meshInst)'
+	void UnregisterMeshInstance(const RuntimeRenderId& _toUnregisterId);
 
 	inline const RenderBucket& GetBucket(RenderPassHash _hash) const { return mBuckets.at(_hash); }
 
@@ -166,4 +178,7 @@ public:
 
 		return blendHash | shadingHash;
 	}
+
+private:
+	void UnregisterId(RenderPassHash _bucketHash, RuntimeRenderId _id);
 };

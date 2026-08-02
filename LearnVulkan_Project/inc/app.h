@@ -91,6 +91,7 @@ private:
 	void Event_IterateColors();
 	void Event_ToggleTextureLoad();
 	void Event_IterateSkyboxes();
+	void Event_ToggleSuzanne();
 
 	void InitVulkan();
 	void CreateInstance();
@@ -115,7 +116,7 @@ private:
 	void CreateMaterialDescriptorPool();
 	void CreateMeshDescriptorPool();
 
-	void RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex) const;
+	void RecordCommandBuffer(VkCommandBuffer _commandBuffer, uint32_t _imageIndex);
 	void RecreateSwapchain();
 	void CleanupSwapchain(bool _isFinalCleanup = false);
 

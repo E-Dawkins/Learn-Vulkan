@@ -446,9 +446,27 @@ void MeshData::MapFreeTransform(RenderTransform& _value, uint32_t& _outIndex) {
 void MeshData::BindTransformIndices(const std::vector<uint32_t>& _transformIndices) {
 	// Set each instance index to correct transform index
 	for (size_t i = 0; i < _transformIndices.size(); i++) {
-		uint32_t& index = mInstToTransformIndex.GetElement<uint32_t>(i);
+		// The use of 'mTransformIndexOffset' should directly match the shader code
+		uint32_t& index = mInstToTransformIndex.GetElement<uint32_t>(mTransformIndexOffset + i);
 		index = _transformIndices[i];
 	}
+
+	mTransformIndexOffset += static_cast<uint32_t>(_transformIndices.size());
+}
+
+void MeshData::ZeroTransformIndexOffset() {
+	mTransformIndexOffset = 0;
+}
+
+void MeshData::PushTransformIndexOffset(VkCommandBuffer _commandBuffer, VkPipelineLayout _layout) const {
+	vkCmdPushConstants(
+		_commandBuffer,
+		_layout,
+		VK_SHADER_STAGE_VERTEX_BIT,
+		0,
+		sizeof(uint32_t),
+		&mTransformIndexOffset
+	);
 }
 
 void MeshData::InitBuffers() {
@@ -546,7 +564,24 @@ void RenderBucketMap::UnregisterMeshInstance(std::weak_ptr<MeshInstance> _toUnre
 	}
 
 	// Erase from map
-	RenderPassHash hash = GetRenderPassHash(blend, shading);
-	mBuckets[hash].erase(meshInst->mRuntimeId);
+	UnregisterId(
+		GetRenderPassHash(blend, shading), 
+		meshInst->GetRuntimeId()
+	);
+}
+
+void RenderBucketMap::UnregisterMeshInstance(const RuntimeRenderId& _toUnregisterId) {
+	// Find bucket that contains the id, then unregister it
+	for (auto& [hash, bucket] : mBuckets) {
+		if (bucket.contains(_toUnregisterId)) {
+			UnregisterId(hash, _toUnregisterId);
+			break;
+		}
+	}
+}
+
+void RenderBucketMap::UnregisterId(RenderPassHash _bucketHash, RuntimeRenderId _id) {
+	mBuckets[_bucketHash].erase(_id);
+	mFreeIds.push(_id);
 }
 #pragma endregion

@@ -222,6 +222,12 @@ public:
 	std::weak_ptr<T> LoadAsset(const std::filesystem::path& _filepath) {
 		const std::filesystem::path fullAssetPath = mAssetFolder / _filepath;
 		const std::string relativeAssetPath = _filepath.string();
+
+		// Check if asset already exists in map
+		if (IsAssetLoaded<T>(relativeAssetPath)) {
+			std::cout << "WARN: AssetManager::LoadAsset called with already loaded asset path: " << relativeAssetPath << "\n";
+			return {};
+		}
 		
 		// Store in asset map
 		auto& assetMap = MapFor<T>::value;
