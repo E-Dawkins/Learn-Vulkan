@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "math/transform.h"
 
-void Transform::SetPosition(const glm::vec3& _p) {
+Transform& Transform::SetPosition(const glm::vec3& _p) {
 	// Note to self - std::exchange does the following but in 1 line:
 	//		vec3 old = mPosition;
 	//		mPosition = _p;
@@ -10,9 +10,11 @@ void Transform::SetPosition(const glm::vec3& _p) {
 	if (onPositionChanged) {
 		onPositionChanged(old, mPosition);
 	}
+
+	return *this;
 }
 
-void Transform::SetRotation(const glm::quat& _r) {
+Transform& Transform::SetRotation(const glm::quat& _r) {
 	const glm::quat normR = glm::normalize(_r);
 	const glm::quat old = std::exchange(mRotation, normR);
 
@@ -21,25 +23,33 @@ void Transform::SetRotation(const glm::quat& _r) {
 	if (onRotationChanged) {
 		onRotationChanged(old, mRotation);
 	}
+
+	return *this;
 }
 
-void Transform::SetScale(const glm::vec3& _s) {
+Transform& Transform::SetScale(const glm::vec3& _s) {
 	const glm::vec3 old = std::exchange(mScale, _s);
 
 	if (onScaleChanged) {
 		onScaleChanged(old, mScale);
 	}
+
+	return *this;
 }
 
-void Transform::AddPosition(const glm::vec3& _deltaPosition) {
+Transform& Transform::AddPosition(const glm::vec3& _deltaPosition) {
 	SetPosition(mPosition + _deltaPosition);
+
+	return *this;
 }
 
-void Transform::AddRotation(const glm::quat& _deltaRotation) {
+Transform& Transform::AddRotation(const glm::quat& _deltaRotation) {
 	SetRotation(_deltaRotation * mRotation);
+
+	return *this;
 }
 
-void Transform::LookAt(const glm::vec3& _targetPos, bool _zeroRoll) {
+Transform& Transform::LookAt(const glm::vec3& _targetPos, bool _zeroRoll) {
 	const glm::vec3 forward = glm::normalize(_targetPos - mPosition);
 
 	// Zero roll requires up to be world up, so just default to it
@@ -65,6 +75,8 @@ void Transform::LookAt(const glm::vec3& _targetPos, bool _zeroRoll) {
 	const glm::mat3 rot(right, forward, upActual);
 
 	SetRotation(glm::quat_cast(rot));
+
+	return *this;
 }
 
 void Transform::RecalculateAxisVectors() {
@@ -96,20 +108,26 @@ void RenderTransform::UpdateMappedMatrix() {
 	mDirty = false;
 }
 
-void RenderTransform::SetPosition(const glm::vec3& _p) {
+RenderTransform& RenderTransform::SetPosition(const glm::vec3& _p) {
 	Transform::SetPosition(_p);
 
 	mDirty = true;
+
+	return *this;
 }
 
-void RenderTransform::SetRotation(const glm::quat& _r) {
+RenderTransform& RenderTransform::SetRotation(const glm::quat& _r) {
 	Transform::SetRotation(_r);
 
 	mDirty = true;
+
+	return *this;
 }
 
-void RenderTransform::SetScale(const glm::vec3& _s) {
+RenderTransform& RenderTransform::SetScale(const glm::vec3& _s) {
 	Transform::SetScale(_s);
 
 	mDirty = true;
+
+	return *this;
 }

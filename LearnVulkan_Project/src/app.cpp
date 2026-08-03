@@ -192,10 +192,7 @@ void App::Event_ToggleSuzanne() {
 
 		std::shared_ptr<MeshInstance> newSuzanne = std::make_shared<MeshInstance>(meshAsset);
 		newSuzanne->SetMaterial(matAsset);
-
-		RenderTransform t;
-		t.SetPosition({ 0, 0, 3 });
-		newSuzanne->AddInstance(t);
+		newSuzanne->AddInstance(RenderTransform().SetPosition({ 0, 0, 3 }));
 
 		suzanneId = mRenderBuckets.RegisterMeshInstance(newSuzanne);
 	}
@@ -298,12 +295,11 @@ void App::InitVulkan() {
 		RenderTransform t;
 		for (int x = 0; x < xCount; x++) {
 			for (int y = 0; y < yCount; y++) {
-				t.SetPosition(glm::vec3(
+				mTempMesh->AddInstance(t.SetPosition(glm::vec3(
 					minX + (x * spacing),
 					minY + (y * spacing),
 					0
-				));
-				mTempMesh->AddInstance(t);
+				)));
 			}
 		}
 
@@ -1073,8 +1069,9 @@ void App::Start() {
 
 	const VkExtent2D& swapchainExtent = mSwapchain->GetExtent();
 	mCamera->SetViewSize({ swapchainExtent.width, swapchainExtent.height });
-	mCamera->transform.SetPosition({ 0, -2, 2 });
-	mCamera->transform.LookAt({ 0, 0, 2 });
+	mCamera->transform
+		.SetPosition({ 0, -2, 2 })
+		.LookAt({ 0, 0, 2 });
 }
 
 void App::MainLoop() {

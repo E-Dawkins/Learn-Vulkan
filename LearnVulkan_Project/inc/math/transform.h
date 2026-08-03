@@ -35,19 +35,19 @@ public:
 	inline const glm::vec3& GetForwardVector() const { return mForward; }
 	inline const glm::vec3& GetUpVector() const { return mUp; }
 
-	virtual void SetPosition(const glm::vec3& _p);
+	virtual Transform& SetPosition(const glm::vec3& _p);
 	// Normalizes '_r' before setting rotation
-	virtual void SetRotation(const glm::quat& _r);
-	virtual void SetScale(const glm::vec3& _s);
+	virtual Transform& SetRotation(const glm::quat& _r);
+	virtual Transform& SetScale(const glm::vec3& _s);
 
 	// Shorthand for 'SetPosition(GetPosition() + deltaPosition)'
-	void AddPosition(const glm::vec3& _deltaPosition);
+	Transform& AddPosition(const glm::vec3& _deltaPosition);
 
 	// Shorthand for 'SetRotation(deltaRotation * GetRotation())'
-	void AddRotation(const glm::quat& _deltaRotation);
+	Transform& AddRotation(const glm::quat& _deltaRotation);
 	
 	// Set rotation to 'look at' _targetPos, optionally zeroing roll
-	void LookAt(const glm::vec3& _targetPos, bool _zeroRoll = false);
+	Transform& LookAt(const glm::vec3& _targetPos, bool _zeroRoll = false);
 
 private:
 	void RecalculateAxisVectors();
@@ -63,7 +63,7 @@ public:
 	void SetMappedMatrix(glm::mat4& _matrixMapping);
 	void UpdateMappedMatrix();
 
-	void SetPosition(const glm::vec3& _p) override;
-	void SetRotation(const glm::quat& _r) override;
-	void SetScale(const glm::vec3& _s) override;
+	RenderTransform& SetPosition(const glm::vec3& _p) override;
+	RenderTransform& SetRotation(const glm::quat& _r) override;
+	RenderTransform& SetScale(const glm::vec3& _s) override;
 };
