@@ -57,7 +57,7 @@ std::string Config::WriteSection(ConfigFile& _config, const std::string& _line) 
 	// Double check section ends with a closing bracket
 	size_t closeBracketPos = _line.find(']');
 	if (closeBracketPos == _line.npos) {
-		LOG_MSG(std::format("Section name incomplete. Config = '{}', Partial Section = '{}'", _config.name, _line), LogVerbosity::Warning);
+		LOG_MSG_CON(std::format("Section name incomplete. Config = '{}', Partial Section = '{}'", _config.name, _line), LogVerbosity::Warning);
 		return "";
 	}
 
@@ -96,7 +96,7 @@ void Config::ProcessVar(ConfigFile& _config, const std::string& _section, std::s
 	// Format of var = 'varName=varValue'
 	size_t equalPos = _line.find('=');
 	if (equalPos == _line.npos) {
-		LOG_MSG(std::format("Malformed config var. Section = '{}', Partial Var = '{}'", _section, _line), LogVerbosity::Warning);
+		LOG_MSG_CON(std::format("Malformed config var. Section = '{}', Partial Var = '{}'", _section, _line), LogVerbosity::Warning);
 		return;
 	}
 

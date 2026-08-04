@@ -7,7 +7,7 @@
 #include "renderer/texture.h"
 #include "utils/debug_logger.h"
 
-#define warn_user(s) LOG_MSG(std::format("No {} found on disk for {}", s, DebugStr()), LogVerbosity::Warning)
+#define warn_user(s) LOG_MSG_CON(std::format("No {} found on disk for {}", s, DebugStr()), LogVerbosity::Warning)
 
 Material::Material(const std::filesystem::path& _filepath) : IAsset(_filepath) {
 	EnforceFileExtension(_filepath, ".material");

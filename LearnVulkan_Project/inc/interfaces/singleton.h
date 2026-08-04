@@ -49,4 +49,8 @@ public:
 
 		return *dynamic_cast<T*>(mInstance);
 	}
+
+	static bool HasValidInstance() {
+		return (mInstance != nullptr);
+	}
 };

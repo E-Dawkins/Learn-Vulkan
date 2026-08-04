@@ -13,15 +13,15 @@ static void SafeShutdown() {
 	App::Shutdown();
 
 	InputManager::Shutdown();
-	Config::Shutdown();
 	DebugLogger::Shutdown();
+	Config::Shutdown();
 }
 
 int main() {
 	try {
 		// Global systems (non App relevant)
-		DebugLogger::Init("saved\\logs");
 		Config::Init("config");
+		DebugLogger::Init();
 		InputManager::Init();
 
 		// Main app

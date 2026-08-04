@@ -1,11 +1,23 @@
 #include "pch.h"
 #include "utils/debug_logger.h"
 
+#include "utils/config.h"
+
 #include <chrono>
 #include <format>
 
-DebugLogger::DebugLogger(const std::filesystem::path& _logFolder)
-	: mLogFolder(_logFolder) {}
+static std::vector<LogMessage> gPreInitMessages;
+
+DebugLogger::DebugLogger()
+{
+	mLogFolder = Config::GetValue<std::string>("engine|systems|log_folder", "saved\\logs");
+	verbosityLevelFile = static_cast<LogVerbosity>(Config::GetValue<uint8_t>("engine|systems|log_verbosity_level_file", 0));
+	verbosityLevelConsole = static_cast<LogVerbosity>(Config::GetValue<uint8_t>("engine|systems|log_verbosity_level_console", 1));
+
+	// Clamp loaded verbosity levels
+	verbosityLevelFile = std::clamp(verbosityLevelFile, LogVerbosity::Info, LogVerbosity::Error);
+	verbosityLevelConsole = std::clamp(verbosityLevelConsole, LogVerbosity::Info, LogVerbosity::Error);
+}
 
 void DebugLogger::OnInitialized() {
 	const std::filesystem::path filePath(mLogFolder / "temp.log");
@@ -19,6 +31,17 @@ void DebugLogger::OnInitialized() {
 	mLogFile = std::ofstream(filePath, std::ios::out | std::ios::trunc);
 
 	LOG_MSG("Init", LogVerbosity::Info);
+
+	// Write all messages that were invoked before we initialized
+	LOG_MSG("--> Pre-Init Messages Start", LogVerbosity::Info);
+	{
+		for (const LogMessage& preMsg : gPreInitMessages) {
+			WriteLog(preMsg);
+		}
+
+		gPreInitMessages.clear();
+	}
+	LOG_MSG("--> Pre-Init Messages End", LogVerbosity::Info);
 }
 
 void DebugLogger::OnCleanup() {
@@ -28,7 +51,29 @@ void DebugLogger::OnCleanup() {
 	mLogFile.close();
 }
 
-void DebugLogger::WriteLog(const std::string& _msg, LogVerbosity _verbosity, const std::string& _callSite) {
+void DebugLogger::WriteLog(const LogMessage& _msg) {
+	if (DebugLogger::HasValidInstance()) {
+		// Always write to file (given high enough verbosity)
+		if (_msg.verbosity >= DebugLogger::GetInstance().verbosityLevelFile) {
+			DebugLogger::GetInstance().WriteFormattedMessage(_msg, DebugLogger::GetInstance().mLogFile);
+		}
+
+		// Only write to console when requested (given high enough verbosity)
+		if (_msg.writeToConsole && _msg.verbosity >= DebugLogger::GetInstance().verbosityLevelConsole) {
+			DebugLogger::GetInstance().WriteFormattedMessage(_msg, std::cout);
+		}
+	}
+	else {
+		// 'WriteLog' called before we have initialized, store for later
+		gPreInitMessages.emplace_back(_msg);
+	}
+}
+
+const std::string& DebugLogger::GetLastLog() {
+	return GetInstance().mLastLog;
+}
+
+void DebugLogger::WriteFormattedMessage(const LogMessage& _msg, std::ostream& _stream) {
 	std::string curMsg;
 
 	// Prepend message with current date + time
@@ -41,27 +86,23 @@ void DebugLogger::WriteLog(const std::string& _msg, LogVerbosity _verbosity, con
 
 	// Prepend message with 'WriteLog' call site
 	{
-		curMsg += std::format("[{}] ", _callSite);
+		curMsg += std::format("[{}] ", _msg.callSite);
 	}
 
 	// Prepend message with verbosity string, i.e. 'LogInfo: '
 	{
-		curMsg += GetLogVerbosityString(_verbosity) + ": ";
+		curMsg += GetLogVerbosityString(_msg.verbosity) + ": ";
 	}
 
 	// Finally ... the message itself
 	{
-		curMsg += _msg;
+		curMsg += _msg.message;
 	}
 
-	mLogFile << curMsg << std::endl;
+	_stream << curMsg << std::endl;
 
 	// ... and store for later retrieval (why? someone might want it)
 	mLastLog = curMsg;
-}
-
-const std::string& DebugLogger::GetLastLog() {
-	return GetInstance().mLastLog;
 }
 
 constexpr std::string DebugLogger::GetLogVerbosityString(LogVerbosity _verbosity) {
